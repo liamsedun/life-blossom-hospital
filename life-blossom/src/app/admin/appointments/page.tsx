@@ -16,6 +16,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { useIsViewOnly } from "@/hooks/use-is-view-only";
 
 type DisplayStatus = "Upcoming" | "Confirmed" | "Completed" | "Cancelled" | "Unattended";
 
@@ -51,6 +52,7 @@ function getDepartment(apt: any): string {
 
 export default function AppointmentsPage() {
   const router = useRouter();
+  const viewOnly = useIsViewOnly();
   const [tab, setTab] = useState("all");
   const [search, setSearch] = useState("");
   const [fromDate, setFromDate] = useState("");
@@ -153,10 +155,12 @@ export default function AppointmentsPage() {
           <h1 className="text-2xl font-bold text-foreground">Appointments</h1>
           <p className="text-sm text-muted-foreground mt-1">Schedule and manage patient appointments</p>
         </div>
-        <Button onClick={() => setShowCreate(true)}
-          className="bg-gradient-to-r from-[#e0a84a] to-amber-500 text-[#0a0f1a] font-semibold border-0">
-          <Plus className="size-4" />New Appointment
-        </Button>
+        {!viewOnly && (
+          <Button onClick={() => setShowCreate(true)}
+            className="bg-gradient-to-r from-[#e0a84a] to-amber-500 text-[#0a0f1a] font-semibold border-0">
+            <Plus className="size-4" />New Appointment
+          </Button>
+        )}
       </div>
 
       {/* Search + date range filter */}

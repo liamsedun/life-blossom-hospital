@@ -13,6 +13,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose,
 } from "@/components/ui/dialog";
 import { cn, formatCurrency } from "@/lib/utils";
+import { useIsViewOnly } from "@/hooks/use-is-view-only";
 import { emitDashboardRefresh } from "@/lib/dashboard-events";
 import { useRoleGuard } from "@/hooks/use-role-guard";
 
@@ -79,6 +80,7 @@ function downloadCsv(filename: string, rows: string[][]) {
 
 export default function OtherIncomePage() {
   const { authorized } = useRoleGuard(["admin", "accountant"]);
+  const viewOnly = useIsViewOnly();
   const [data, setData] = useState<IncomeEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -249,10 +251,12 @@ export default function OtherIncomePage() {
             className="bg-white text-black border-border hover:bg-gray-100 h-9">
             <Download className="size-4 mr-1" />Export
           </Button>
-          <Button onClick={() => { setEditItem(null); setForm({ ...emptyForm, income_date: new Date().toISOString().split("T")[0] }); setShowAdd(true); }}
-            className="bg-gradient-to-r from-[#e0a84a] to-amber-500 text-[#0a0f1a] font-semibold border-0 shadow-lg shadow-[#e0a84a]/20 h-9">
-            <Plus className="size-4" />Add Income
-          </Button>
+          {!viewOnly && (
+            <Button onClick={() => { setEditItem(null); setForm({ ...emptyForm, income_date: new Date().toISOString().split("T")[0] }); setShowAdd(true); }}
+              className="bg-gradient-to-r from-[#e0a84a] to-amber-500 text-[#0a0f1a] font-semibold border-0 shadow-lg shadow-[#e0a84a]/20 h-9">
+              <Plus className="size-4" />Add Income
+            </Button>
+          )}
         </div>
       </div>
 

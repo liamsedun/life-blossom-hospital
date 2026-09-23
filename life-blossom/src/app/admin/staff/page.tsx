@@ -21,6 +21,7 @@ import { cn } from "@/lib/utils";
 import { useStaff, useCreateStaff } from "@/hooks/use-staff";
 import { useRoleGuard } from "@/hooks/use-role-guard";
 import { useAuthStore } from "@/stores/auth-store";
+import { useIsViewOnly } from "@/hooks/use-is-view-only";
 import type { Staff } from "@/lib/api-types";
 
 type StatusFilter = "all" | "on_duty" | "off_duty" | "on_leave";
@@ -102,6 +103,7 @@ const roles = ["doctor", "nurse", "admin", "accountant", "cashier", "receptionis
 export default function StaffPage() {
   const { authorized } = useRoleGuard(["admin", "accountant"]);
   const { user } = useAuthStore();
+  const viewOnly = useIsViewOnly();
   const isAdmin = user?.role === "admin";
   const availableRoles = roles;
   const { data: staffData, loading, refresh } = useStaff();
@@ -529,14 +531,18 @@ export default function StaffPage() {
           <p className="text-sm text-muted-foreground mt-1">Manage hospital staff, duty roaster and schedules</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button onClick={() => openRoster()}
-            className="bg-muted border border-border text-foreground hover:bg-accent">
-            <CalendarClock className="size-4" />Schedule Duty
-          </Button>
-          <Button onClick={() => { resetForm(); setShowAdd(true); }}
-            className="bg-gradient-to-r from-[#e0a84a] to-amber-500 text-[#0a0f1a] font-semibold border-0 shadow-lg shadow-[#e0a84a]/20">
-            <Plus className="size-4" />Add Staff Member
-          </Button>
+          {!viewOnly && (
+            <Button onClick={() => openRoster()}
+              className="bg-muted border border-border text-foreground hover:bg-accent">
+              <CalendarClock className="size-4" />Schedule Duty
+            </Button>
+          )}
+          {!viewOnly && (
+            <Button onClick={() => { resetForm(); setShowAdd(true); }}
+              className="bg-gradient-to-r from-[#e0a84a] to-amber-500 text-[#0a0f1a] font-semibold border-0 shadow-lg shadow-[#e0a84a]/20">
+              <Plus className="size-4" />Add Staff Member
+            </Button>
+          )}
         </div>
       </div>
 

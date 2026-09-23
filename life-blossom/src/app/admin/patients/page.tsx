@@ -25,6 +25,7 @@ import DoctorNotesSection from "@/components/DoctorNotesSection";
 import MedicalReportsSection from "@/components/MedicalReportsSection";
 import PrescriptionForm from "@/components/PrescriptionForm";
 import { useAuth } from "@/contexts/auth-context";
+import { useIsViewOnly } from "@/hooks/use-is-view-only";
 import type { Patient } from "@/lib/api-types";
 
 function DependantsList({ patientId }: { patientId: string }) {
@@ -255,6 +256,7 @@ export default function PatientsPage() {
   const [showRxForm, setShowRxForm] = useState(false);
   const [rxRefreshKey, setRxRefreshKey] = useState(0);
   const { user } = useAuth();
+  const viewOnly = useIsViewOnly();
 
   function resetForm() { setForm(emptyForm); setFormError(""); }
 
@@ -409,10 +411,12 @@ export default function PatientsPage() {
           <h1 className="text-2xl font-bold text-foreground">Patients</h1>
           <p className="text-sm text-muted-foreground mt-1">Manage all registered patients</p>
         </div>
-        <Button onClick={() => { resetForm(); setShowAdd(true); }}
-          className="bg-gradient-to-r from-[#e0a84a] to-amber-500 text-[#0a0f1a] font-semibold border-0">
-          <Plus className="size-4" />Add Patient
-        </Button>
+        {!viewOnly && (
+          <Button onClick={() => { resetForm(); setShowAdd(true); }}
+            className="bg-gradient-to-r from-[#e0a84a] to-amber-500 text-[#0a0f1a] font-semibold border-0">
+            <Plus className="size-4" />Add Patient
+          </Button>
+        )}
       </div>
 
       <Card className="border-border bg-card backdrop-blur-xl">
@@ -503,6 +507,7 @@ export default function PatientsPage() {
                                   onClick={() => setSelectedPatient(p)}>
                                   <Eye className="size-3.5 mr-1" />View
                                 </Button>
+                                {!viewOnly && (
                                 <DropdownMenu>
                                   <DropdownMenuTrigger asChild>
                                     <Button variant="ghost" size="icon" className="size-8 text-muted-foreground hover:text-foreground">
@@ -524,6 +529,7 @@ export default function PatientsPage() {
                                     </DropdownMenuItem>
                                   </DropdownMenuContent>
                                 </DropdownMenu>
+                                )}
                               </div>
                             </td>
                           </tr>

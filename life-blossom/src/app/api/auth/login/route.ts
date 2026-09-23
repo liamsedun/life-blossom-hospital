@@ -187,7 +187,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
-const STAFF_ROLES = ["admin", "accountant", "doctor", "nurse", "cashier", "receptionist", "lab_technician", "pharmacist", "radiographer", "radiologist"];
+const STAFF_ROLES = ["admin", "accountant", "doctor", "nurse", "cashier", "receptionist", "lab_technician", "pharmacist", "radiographer", "radiologist", "student_staff"];
 
 /** Copy Set-Cookie headers from a cookie collector to the actual response. */
 function propagateCookies(collector: NextResponse, response: NextResponse): NextResponse {

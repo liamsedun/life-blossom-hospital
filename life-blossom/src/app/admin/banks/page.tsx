@@ -12,6 +12,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { cn, formatCurrency } from "@/lib/utils";
 import { useRoleGuard } from "@/hooks/use-role-guard";
+import { useIsViewOnly } from "@/hooks/use-is-view-only";
 
 interface BankAccount {
   id: string; bank_name: string; account_name: string; account_number: string; is_active: boolean;
@@ -33,6 +34,7 @@ function GradientCard({ children, gradient, className }: { children: React.React
 export default function BanksPage() {
   const router = useRouter();
   const { authorized } = useRoleGuard(["admin", "accountant", "cashier"]);
+  const viewOnly = useIsViewOnly();
   const [accounts, setAccounts] = useState<BankAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [showTransfer, setShowTransfer] = useState(false);
@@ -91,10 +93,12 @@ export default function BanksPage() {
           <h1 className="text-2xl font-bold text-white">Bank Accounts</h1>
           <p className="text-sm text-white/50 mt-1">All hospital bank and cash accounts</p>
         </div>
-        <Button onClick={() => setShowTransfer(true)}
-          className="bg-gradient-to-r from-[#e0a84a] to-amber-500 text-[#0a0f1a] font-semibold border-0 shadow-lg shadow-[#e0a84a]/20 h-9">
-          <ArrowRightLeft className="size-4" />Transfer
-        </Button>
+        {!viewOnly && (
+          <Button onClick={() => setShowTransfer(true)}
+            className="bg-gradient-to-r from-[#e0a84a] to-amber-500 text-[#0a0f1a] font-semibold border-0 shadow-lg shadow-[#e0a84a]/20 h-9">
+            <ArrowRightLeft className="size-4" />Transfer
+          </Button>
+        )}
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

@@ -21,6 +21,7 @@ import { useStaff } from "@/hooks/use-staff";
 import { useInvoices } from "@/hooks/use-billing";
 import { useAuth } from "@/contexts/auth-context";
 import { listenDashboardRefresh } from "@/lib/dashboard-events";
+import { useIsViewOnly } from "@/hooks/use-is-view-only";
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -63,6 +64,7 @@ interface OtherIncomeRecord {
 export default function AdminDashboard() {
   const router = useRouter();
   const { user } = useAuth();
+  const viewOnly = useIsViewOnly();
   const { data: appointmentsData, loading: loadingAppts, refresh: refreshAppts } = useAppointments();
   const { data: patientsData, loading: loadingPatients, refresh: refreshPatients } = usePatients();
   const { data: staffData, loading: loadingStaff, refresh: refreshStaff } = useStaff();
@@ -587,16 +589,20 @@ export default function AdminDashboard() {
         <Card className="border-white/[0.06] bg-white/[0.03] backdrop-blur-xl">
           <CardHeader><CardTitle className="text-base text-white">Quick Actions</CardTitle></CardHeader>
           <CardContent className="space-y-3">
-            <Button className="w-full justify-start gap-3 h-11 bg-white/[0.04] hover:bg-white/[0.08] border-white/[0.06] text-white/80 hover:text-white transition-all"
-              onClick={() => router.push("/admin/patients")}>
-              <div className="flex size-7 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400"><Plus className="size-4" /></div>
-              Add Patient
-            </Button>
-            <Button className="w-full justify-start gap-3 h-11 bg-white/[0.04] hover:bg-white/[0.08] border-white/[0.06] text-white/80 hover:text-white transition-all"
-              onClick={() => router.push("/admin/appointments")}>
-              <div className="flex size-7 items-center justify-center rounded-lg bg-blue-500/10 text-blue-400"><Calendar className="size-4" /></div>
-              Schedule Appointment
-            </Button>
+            {!viewOnly && (
+              <Button className="w-full justify-start gap-3 h-11 bg-white/[0.04] hover:bg-white/[0.08] border-white/[0.06] text-white/80 hover:text-white transition-all"
+                onClick={() => router.push("/admin/patients")}>
+                <div className="flex size-7 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400"><Plus className="size-4" /></div>
+                Add Patient
+              </Button>
+            )}
+            {!viewOnly && (
+              <Button className="w-full justify-start gap-3 h-11 bg-white/[0.04] hover:bg-white/[0.08] border-white/[0.06] text-white/80 hover:text-white transition-all"
+                onClick={() => router.push("/admin/appointments")}>
+                <div className="flex size-7 items-center justify-center rounded-lg bg-blue-500/10 text-blue-400"><Calendar className="size-4" /></div>
+                Schedule Appointment
+              </Button>
+            )}
             <Button className="w-full justify-start gap-3 h-11 bg-white/[0.04] hover:bg-white/[0.08] border-white/[0.06] text-white/80 hover:text-white transition-all"
               onClick={() => router.push("/admin/reports")}>
               <div className="flex size-7 items-center justify-center rounded-lg bg-amber-500/10 text-amber-400"><FileText className="size-4" /></div>

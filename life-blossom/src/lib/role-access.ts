@@ -9,7 +9,7 @@ export interface NavItem {
   module?: string;
 }
 
-const ALL_STAFF: UserRole[] = ["admin", "doctor", "nurse", "accountant", "cashier", "receptionist", "lab_technician", "pharmacist", "radiographer", "radiologist"];
+const ALL_STAFF: UserRole[] = ["admin", "doctor", "nurse", "accountant", "cashier", "receptionist", "lab_technician", "pharmacist", "radiographer", "radiologist", "student_staff"];
 
 /** Module keys matching the role_permissions table */
 export const MODULE_KEYS = [

@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
 import { usePaymentStore } from "@/stores/payment-store";
 import CreateInvoiceModal from "@/components/billing/create-invoice-modal";
+import { useIsViewOnly } from "@/hooks/use-is-view-only";
 import EditInvoiceModal from "@/components/billing/edit-invoice-modal";
 import type { InvoiceStatus, Invoice } from "@/lib/api-types";
 import { emitDashboardRefresh } from "@/lib/dashboard-events";
@@ -71,6 +72,7 @@ function GradientCard({ children, gradient, className }: { children: React.React
 }
 
 export default function BillingPage() {
+  const viewOnly = useIsViewOnly();
   const [search, setSearch] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [editInvoice, setEditInvoice] = useState<Invoice | null>(null);
@@ -235,10 +237,12 @@ export default function BillingPage() {
               aria-label="Reporting period"
             />
           </div>
-          <Button onClick={() => setShowCreate(true)}
-            className="bg-[#e0a84a] hover:bg-[#e0a84a]/90 text-[#0a0f1a] font-semibold shadow-lg shadow-[#e0a84a]/20">
-            <Plus className="size-4" />Create Invoice
-          </Button>
+          {!viewOnly && (
+            <Button onClick={() => setShowCreate(true)}
+              className="bg-[#e0a84a] hover:bg-[#e0a84a]/90 text-[#0a0f1a] font-semibold shadow-lg shadow-[#e0a84a]/20">
+              <Plus className="size-4" />Create Invoice
+            </Button>
+          )}
         </div>
       </div>
 

@@ -9,6 +9,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/auth-context";
+import { useIsViewOnly } from "@/hooks/use-is-view-only";
 import { fileToSquareImage } from "@/lib/avatar-resize";
 import type { Dependant } from "@/lib/api-types";
 
@@ -272,6 +273,7 @@ function AddDependantModal({ open, onClose, onCreated, maxReached }: {
 export default function DependantsPage() {
   const router = useRouter();
   const { user } = useAuth();
+  const viewOnly = useIsViewOnly();
   const isDependant = user?.role === "patient" && Boolean(user.patient?.is_dependant);
   const [dependants, setDependants] = useState<Dependant[]>([]);
   const [familyCode, setFamilyCode] = useState("");
@@ -377,7 +379,7 @@ export default function DependantsPage() {
               ? "Your main account holder manages dependants for your family."
               : "Add family members — children, spouse or relatives — so they're covered under your family account."}
           </p>
-          {!isDependant && (
+        {!isDependant && !viewOnly && (
             <button
               onClick={() => setShowAdd(true)}
               className="mt-4 h-10 px-5 bg-gradient-to-r from-[#e0a84a] to-amber-500 text-[#0a0f1a] text-sm font-semibold rounded-xl inline-flex items-center gap-2 shadow-lg shadow-[#e0a84a]/20 hover:shadow-xl hover:shadow-[#e0a84a]/30 transition-all active:scale-[0.98]"
@@ -451,7 +453,7 @@ export default function DependantsPage() {
         </div>
       )}
 
-      {!isDependant && !maxReached && dependants.length > 0 && (
+      {!isDependant && !viewOnly && !maxReached && dependants.length > 0 && (
         <button
           onClick={() => setShowAdd(true)}
           className="w-full h-12 rounded-2xl border border-dashed border-white/[0.12] text-sm text-muted-foreground hover:text-[#e0a84a] hover:border-[#e0a84a]/40 transition-all inline-flex items-center justify-center gap-2 bg-white/[0.02]"

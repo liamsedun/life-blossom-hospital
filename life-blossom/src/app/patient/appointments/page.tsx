@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Calendar, Clock, MapPin, Plus, Video, ChevronRight, X, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAppointmentStore } from "@/stores/appointment-store";
+import { useIsViewOnly } from "@/hooks/use-is-view-only";
 import type { Appointment } from "@/lib/api-types";
 
 const statusColors: Record<string, string> = {
@@ -39,6 +40,7 @@ function GlassCard({ children, className }: { children: React.ReactNode; classNa
 
 export default function AppointmentsPage() {
   const [tab, setTab] = useState<"upcoming" | "past">("upcoming");
+  const viewOnly = useIsViewOnly();
   const store = useAppointmentStore();
   const appointments = store.appointments;
   const loading = store.loading;
@@ -241,7 +243,7 @@ export default function AppointmentsPage() {
                     In-person
                   </span>
                 </div>
-                {tab === "upcoming" && (
+                {tab === "upcoming" && !viewOnly && (
                   <div className="flex gap-2 mt-3 pt-3 border-t border-border">
                     <button
                       onClick={() => openReschedule(appt)}
@@ -269,12 +271,14 @@ export default function AppointmentsPage() {
         )}
       </div>
 
-      <Link
-        href="/patient/book"
-        className="fixed bottom-20 right-4 z-30 w-14 h-14 bg-gradient-to-br from-[#e0a84a] to-amber-500 text-[#0a0f1a] rounded-full flex items-center justify-center shadow-lg shadow-[#e0a84a]/20 hover:shadow-xl hover:shadow-[#e0a84a]/30 transition-all hover:scale-110 active:scale-95"
-      >
-        <Plus className="w-6 h-6" />
-      </Link>
+      {!viewOnly && (
+        <Link
+          href="/patient/book"
+          className="fixed bottom-20 right-4 z-30 w-14 h-14 bg-gradient-to-br from-[#e0a84a] to-amber-500 text-[#0a0f1a] rounded-full flex items-center justify-center shadow-lg shadow-[#e0a84a]/20 hover:shadow-xl hover:shadow-[#e0a84a]/30 transition-all hover:scale-110 active:scale-95"
+        >
+          <Plus className="w-6 h-6" />
+        </Link>
+      )}
 
       {/* Reschedule Modal */}
       {rescheduleAppt && (

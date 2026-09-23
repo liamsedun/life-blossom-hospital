@@ -2,7 +2,7 @@
 // Database types — mirrors schema.sql exactly
 // ============================================================================
 
-export type UserRole = "patient" | "admin" | "doctor" | "nurse" | "accountant" | "cashier" | "receptionist" | "lab_technician" | "pharmacist" | "radiographer" | "radiologist";
+export type UserRole = "patient" | "admin" | "doctor" | "nurse" | "accountant" | "cashier" | "receptionist" | "lab_technician" | "pharmacist" | "radiographer" | "radiologist" | "student_staff" | "student_patient";
 export type AppointmentStatus = "scheduled" | "confirmed" | "in_progress" | "completed" | "cancelled" | "no_show";
 export type AppointmentType = "in_person" | "video_call";
 export type RecordType = "diagnosis" | "lab_result" | "prescription" | "surgery_report" | "vaccination" | "imaging";

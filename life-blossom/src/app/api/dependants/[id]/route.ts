@@ -12,7 +12,7 @@ const VALID_RELATIONSHIPS = ["child", "spouse", "parent", "sibling", "grandparen
 const VALID_BLOOD_GROUPS = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"];
 const VALID_GENOTYPES = ["AA", "AS", "SS", "AC", "SC", "CC"];
 
-const STAFF_ROLES = ["doctor", "nurse", "admin", "accountant", "cashier", "receptionist", "lab_technician", "pharmacist", "radiographer", "radiologist"];
+const STAFF_ROLES = ["doctor", "nurse", "admin", "accountant", "cashier", "receptionist", "lab_technician", "pharmacist", "radiographer", "radiologist", "student_staff"];
 
 type PatientRow = {
   id: string;

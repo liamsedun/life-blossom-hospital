@@ -1,13 +1,15 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-type Role = "patient" | "admin" | "doctor" | "nurse" | "accountant" | "cashier" | "receptionist" | "lab_technician" | "pharmacist" | "radiographer" | "radiologist";
+type Role = "patient" | "admin" | "doctor" | "nurse" | "accountant" | "cashier" | "receptionist" | "lab_technician" | "pharmacist" | "radiographer" | "radiologist" | "student_staff" | "student_patient";
 
-const STAFF_ROLES: Role[] = ["admin", "doctor", "nurse", "accountant", "cashier", "receptionist", "lab_technician", "pharmacist", "radiographer", "radiologist"];
+const STAFF_ROLES: Role[] = ["admin", "doctor", "nurse", "accountant", "cashier", "receptionist", "lab_technician", "pharmacist", "radiographer", "radiologist", "student_staff"];
+
+const PATIENT_ROLES: Role[] = ["patient", "student_patient"];
 
 /** Routes that require authentication. */
 const PROTECTED_ROUTES = [
-  { prefix: "/patient", allowedRoles: ["patient" as Role] },
+  { prefix: "/patient", allowedRoles: PATIENT_ROLES },
   { prefix: "/admin", allowedRoles: STAFF_ROLES },
 ];
 
@@ -72,7 +74,7 @@ export async function updateSession(request: NextRequest) {
     if (matchedRoute && role && !matchedRoute.allowedRoles.includes(role)) {
       // Redirect to the correct dashboard for their role
       const url = request.nextUrl.clone();
-      if (role === "patient") {
+      if (role === "patient" || role === "student_patient") {
         url.pathname = "/patient";
       } else {
         url.pathname = "/admin";

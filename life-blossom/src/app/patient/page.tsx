@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import Logo from "@/components/ui/logo";
 import Link from "next/link";
 import { useAuth } from "@/contexts/auth-context";
+import { useIsViewOnly } from "@/hooks/use-is-view-only";
 import { usePushNotifications } from "@/contexts/notification-context";
 import { useAppointmentStore } from "@/stores/appointment-store";
 import { usePaymentStore } from "@/stores/payment-store";
@@ -173,6 +174,7 @@ function IdentityCard({ patient, org }: { patient: Patient | null; org: OrgProfi
 
 export default function PatientDashboard() {
   const { user } = useAuth();
+  const viewOnly = useIsViewOnly();
   const [patient, setPatient] = useState<Patient | null>(null);
   const [dependants, setDependants] = useState<Dependant[]>([]);
   const [org, setOrg] = useState<OrgProfile>({
@@ -256,7 +258,7 @@ export default function PatientDashboard() {
   const lastPayment = sortedPayments?.[0];
 
   const quickActions = [
-    { label: "Book", href: "/patient/book", gradient: "from-[#e0a84a] to-amber-500", icon: Calendar },
+    { label: "Book", href: "/patient/book", gradient: "from-[#e0a84a] to-amber-500", icon: Calendar, viewOnlyHidden: true },
     { label: "Pay", href: "/patient/payments", gradient: "from-emerald-500 to-teal-400", icon: CreditCard },
     { label: "Chat", href: "/patient/chats", gradient: "from-blue-500 to-indigo-400", icon: MessageCircle },
     { label: "WhatsApp", href: "https://wa.me/2349058038476", gradient: "from-green-500 to-emerald-400", icon: Phone, external: true },
@@ -264,7 +266,7 @@ export default function PatientDashboard() {
     { label: "Rx", href: "/patient/prescriptions", gradient: "from-pink-500 to-rose-400", icon: Pill },
     { label: "Messages", href: "/patient/internal-mail", gradient: "from-rose-500 to-pink-400", icon: Mail },
     { label: "Bills", href: "/patient/invoices", gradient: "from-orange-500 to-amber-400", icon: Receipt },
-  ];
+  ].filter(a => !(viewOnly && a.viewOnlyHidden));
 
   const summaryCards = [
     {

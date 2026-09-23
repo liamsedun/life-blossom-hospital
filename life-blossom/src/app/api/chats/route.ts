@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { withAuth, ok, err, parseBody, resolveOrgId, resolvePatientId, NotFoundError, ValidationError } from "@/lib/api-utils";
 
-const STAFF_ROLES = ["doctor", "nurse", "admin", "accountant", "cashier", "receptionist", "lab_technician", "pharmacist", "radiographer", "radiologist"];
+const STAFF_ROLES = ["doctor", "nurse", "admin", "accountant", "cashier", "receptionist", "lab_technician", "pharmacist", "radiographer", "radiologist", "student_staff"];
 
 interface ChatListItem {
   id: string;

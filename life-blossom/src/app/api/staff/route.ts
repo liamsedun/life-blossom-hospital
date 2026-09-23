@@ -63,7 +63,7 @@ export const POST = withAuth(async (req, supabase, authUserId) => {
   if (!body.email || !body.password || !body.first_name || !body.last_name || !body.role) {
     throw new ValidationError("Missing required fields: email, password, first_name, last_name, role");
   }
-  const ALL_STAFF_ROLES = ["doctor", "nurse", "admin", "accountant", "cashier", "receptionist", "lab_technician", "pharmacist", "radiographer", "radiologist"];
+  const ALL_STAFF_ROLES = ["doctor", "nurse", "admin", "accountant", "cashier", "receptionist", "lab_technician", "pharmacist", "radiographer", "radiologist", "student_staff"];
   if (!ALL_STAFF_ROLES.includes(body.role)) {
     throw new ValidationError(`Invalid role. Must be one of: ${ALL_STAFF_ROLES.join(", ")}`);
   }
