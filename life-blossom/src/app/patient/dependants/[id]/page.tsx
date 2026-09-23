@@ -6,14 +6,14 @@ import Link from "next/link";
 import {
   ArrowLeft, AlertTriangle, Calendar, CreditCard, FileText, HeartPulse,
   Pencil, Trash2, X, Droplet, Dna, Phone, Users, Stethoscope,
-  CheckCircle2, Clock, PlusCircle, Wallet, ShieldCheck, Baby, Heart, Camera,
+  CheckCircle2, Clock, PlusCircle, Wallet, ShieldCheck, Baby, Heart, Camera, Pill,
 } from "lucide-react";
 import { emitDashboardRefresh } from "@/lib/dashboard-events";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/auth-context";
 import DoctorNotesSection from "@/components/DoctorNotesSection";
 import MedicalReportsSection from "@/components/MedicalReportsSection";
-import type { Dependant, MedicalRecord, Invoice, Appointment } from "@/lib/api-types";
+import type { Dependant, MedicalRecord, Invoice, Appointment, Prescription } from "@/lib/api-types";
 import { fileToSquareImage } from "@/lib/avatar-resize";
 
 const BLOOD_GROUPS = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"];
@@ -71,6 +71,7 @@ export default function DependantProfilePage() {
   const [records, setRecords] = useState<MedicalRecord[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
@@ -106,11 +107,13 @@ export default function DependantProfilePage() {
       fetch(`/api/medical-records?patient_id=${dependantId}&page_size=50`).then((r) => r.json()),
       fetch(`/api/invoices?patient_id=${dependantId}&page_size=50`).then((r) => r.json()),
       fetch(`/api/appointments?patient_id=${dependantId}&page_size=50`).then((r) => r.json()),
+      fetch(`/api/prescriptions?patient_id=${dependantId}&page_size=50`).then((r) => r.json()),
     ])
-      .then(([rec, inv, appt]) => {
+      .then(([rec, inv, appt, rx]) => {
         if (rec.success) setRecords(rec.data || []);
         if (inv.success) setInvoices(inv.data || []);
         if (appt.success) setAppointments(appt.data || []);
+        if (rx.success) setPrescriptions(rx.data || []);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -375,6 +378,52 @@ export default function DependantProfilePage() {
               patient={{ name: dependant?.full_name || "Dependant", phone: dependant?.phone || undefined }}
             />
           </div>
+
+          {/* Prescriptions */}
+          {prescriptions.length > 0 && (
+            <div className="pt-3">
+              <h3 className="flex items-center gap-2 text-sm font-bold text-foreground mb-3">
+                <Pill className="w-4 h-4 text-[#e0a84a]" /> Prescriptions ({prescriptions.length})
+              </h3>
+              <div className="space-y-3">
+                {prescriptions.map((rx) => (
+                  <GlassCard key={rx.id}>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-foreground">{rx.diagnosis || "Prescription"}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {new Date(rx.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                          {rx.doctor?.user && <> — Dr. {rx.doctor.user.first_name} {rx.doctor.user.last_name}</>}
+                        </p>
+                        {rx.items && rx.items.length > 0 && (
+                          <div className="mt-2 space-y-1">
+                            {rx.items.map((item) => (
+                              <div key={item.id} className="flex items-center gap-2 text-xs text-muted-foreground">
+                                <span className="w-1 h-1 rounded-full bg-[#e0a84a] shrink-0" />
+                                <span className="font-medium text-foreground">{item.medication_name}</span>
+                                <span>— {item.dosage}, {item.frequency}{item.duration ? `, ${item.duration}` : ""}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <span className={cn(
+                        "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border capitalize shrink-0",
+                        rx.status === "active"
+                          ? "bg-emerald-500/10 border-emerald-500/25 text-emerald-400"
+                          : rx.status === "dispensed"
+                          ? "bg-blue-500/10 border-blue-500/25 text-blue-400"
+                          : "bg-muted border-white/10 text-muted-foreground"
+                      )}>
+                        {rx.status === "completed" ? <CheckCircle2 className="w-3 h-3" /> : rx.status === "dispensed" ? <Pill className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
+                        {rx.status}
+                      </span>
+                    </div>
+                  </GlassCard>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 

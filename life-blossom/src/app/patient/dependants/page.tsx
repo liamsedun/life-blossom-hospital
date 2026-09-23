@@ -15,7 +15,7 @@ import { useIsViewOnly } from "@/hooks/use-is-view-only";
 import { fileToSquareImage } from "@/lib/avatar-resize";
 import DoctorNotesSection from "@/components/DoctorNotesSection";
 import MedicalReportsSection from "@/components/MedicalReportsSection";
-import type { Dependant, Invoice, Appointment, Prescription } from "@/lib/api-types";
+import type { Dependant, Invoice, Appointment, Prescription, MedicalRecord } from "@/lib/api-types";
 
 const MAX_DEPENDANTS = 5;
 
@@ -44,6 +44,11 @@ const invoiceStatusCls: Record<string, string> = {
   partially_paid: "bg-amber-500/10 text-amber-400 border-amber-500/20",
   void: "bg-muted text-muted-foreground border-border",
   cancelled: "bg-rose-500/10 text-rose-400 border-rose-500/20",
+};
+
+const recordTypeLabels: Record<string, string> = {
+  diagnosis: "Diagnosis", lab_result: "Lab Result", prescription: "Prescription",
+  surgery_report: "Surgery Report", vaccination: "Vaccination", imaging: "Imaging",
 };
 
 function GlassCard({ children, className }: { children: React.ReactNode; className?: string }) {
@@ -85,6 +90,7 @@ function DependantTabs({ dependant }: { dependant: Dependant }) {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
+  const [medicalRecords, setMedicalRecords] = useState<MedicalRecord[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -94,10 +100,12 @@ function DependantTabs({ dependant }: { dependant: Dependant }) {
       fetch(`/api/invoices?patient_id=${id}&page_size=50`).then(r => r.json()),
       fetch(`/api/appointments?patient_id=${id}&page_size=50`).then(r => r.json()),
       fetch(`/api/prescriptions?patient_id=${id}&page_size=50`).then(r => r.json()),
-    ]).then(([inv, apt, rx]) => {
+      fetch(`/api/medical-records?patient_id=${id}&page_size=50`).then(r => r.json()),
+    ]).then(([inv, apt, rx, rec]) => {
       setInvoices(inv.success ? inv.data || [] : []);
       setAppointments(apt.success ? apt.data || [] : []);
       setPrescriptions(rx.success ? rx.data || [] : []);
+      setMedicalRecords(rec.success ? rec.data || [] : []);
     }).catch(() => {}).finally(() => setLoading(false));
   }, [dependant.id]);
 
@@ -172,6 +180,66 @@ function DependantTabs({ dependant }: { dependant: Dependant }) {
             </div>
           ) : (
             <>
+              {/* Medical Records */}
+              {medicalRecords.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="flex items-center gap-1.5 text-xs font-semibold text-[#e0a84a]">
+                    <FileText className="w-3.5 h-3.5" /> Medical Records ({medicalRecords.length})
+                  </h4>
+                  {medicalRecords.map((r) => (
+                    <GlassCard key={r.id} className="!p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-[#e0a84a]/10 border border-[#e0a84a]/20 text-[9px] font-semibold text-[#e0a84a]">
+                          <FileText className="w-3 h-3" /> {recordTypeLabels[r.record_type] || r.record_type}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground">{formatDate(r.created_at)}</span>
+                      </div>
+                      <p className="text-xs font-semibold text-foreground mt-1.5">{r.title}</p>
+                      {r.description && <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-2">{r.description}</p>}
+                    </GlassCard>
+                  ))}
+                </div>
+              )}
+
+              {/* Prescriptions */}
+              {prescriptions.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="flex items-center gap-1.5 text-xs font-semibold text-[#e0a84a]">
+                    <Pill className="w-3.5 h-3.5" /> Prescriptions ({prescriptions.length})
+                  </h4>
+                  {prescriptions.map((rx) => (
+                    <GlassCard key={rx.id} className="!p-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-semibold text-foreground">{rx.diagnosis || "Prescription"}</p>
+                          <p className="text-[11px] text-muted-foreground mt-0.5">
+                            {formatDate(rx.created_at)}
+                            {rx.doctor?.user && <> — Dr. {rx.doctor.user.first_name} {rx.doctor.user.last_name}</>}
+                          </p>
+                          {rx.items && rx.items.length > 0 && (
+                            <div className="mt-1.5 space-y-0.5">
+                              {rx.items.map((item) => (
+                                <p key={item.id} className="text-[10px] text-muted-foreground">
+                                  • {item.medication_name} — {item.dosage}, {item.frequency}{item.duration ? `, ${item.duration}` : ""}
+                                </p>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        <span className={cn(
+                          "inline-flex px-1.5 py-0.5 rounded-full text-[9px] font-semibold border capitalize shrink-0",
+                          rx.status === "active" ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                            : rx.status === "dispensed" ? "bg-blue-500/10 text-blue-400 border-blue-500/20"
+                            : "bg-muted text-muted-foreground border-border"
+                        )}>
+                          {rx.status}
+                        </span>
+                      </div>
+                    </GlassCard>
+                  ))}
+                </div>
+              )}
+
               <DoctorNotesSection patientId={dependant.id} patientName={dependant.full_name} />
               <MedicalReportsSection
                 patientId={dependant.id}
