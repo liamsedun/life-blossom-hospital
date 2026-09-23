@@ -8,9 +8,3 @@
 
 [build.environment]
   NODE_VERSION = "22"
-
-# NEXT_PUBLIC_* vars are intentionally embedded in client JS bundles.
-# VAPID keys are safe to ship (public key is public by design; private key
-# is only used server-side and won't appear in client output).
-[build.processing.secrets_scanning]
-  omit_keys = ["NEXT_PUBLIC_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_ANON_KEY", "NEXT_PUBLIC_VAPID_PUBLIC_KEY", "VAPID_PRIVATE_KEY", "VAPID_CONTACT", "SUPABASE_SERVICE_ROLE_KEY"]
