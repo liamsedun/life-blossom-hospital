@@ -1,0 +1,1318 @@
+@import "tailwindcss";
+
+/* Tailwind v4: override the dark variant to use the .dark class
+   (on <html>) instead of prefers-color-scheme media query. */
+@variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-primary: #0F4C81;
+  --color-primary-light: #1A6BB5;
+  --color-primary-lighter: #EAF4FF;
+  --color-primary-dark: #0B3A63;
+  --color-secondary: #0891B2;
+  --color-secondary-light: #E0F2FE;
+  --color-accent: #16A34A;
+  --color-accent-light: #DCFCE7;
+  --color-warning: #F39C12;
+  --color-warning-light: #FEF3C7;
+  --color-danger: #E74C3C;
+  --color-danger-light: #FEE2E2;
+  --color-background: #F7F9FC;
+  --color-foreground: #1F2D3D;
+  --color-text-secondary: #6B7A90;
+  --color-card: #FFFFFF;
+  --color-border: #E5EAF0;
+  --color-muted: #F1F4F9;
+}
+
+:root {
+  --background: #F7F9FC;
+  --foreground: #1F2D3D;
+  --primary: #0F4C81;
+  --primary-light: #EAF4FF;
+  --text-secondary: #6B7A90;
+  --electric-bg: #ffffff;
+  --electric-text: #475569;
+  --electric-text-hover: #0ea5e9;
+  --electric-glow: rgba(14,165,233,0.35);
+  --electric-cyan: #0ea5e9;
+}
+
+.dark {
+  --background: #0a0f1a;
+  --foreground: #eef1f5;
+  --primary: #e0a84a;
+  --primary-light: #e0a84a;
+  --text-secondary: #8fa0b3;
+  --electric-bg: #10151f;
+  --electric-text: #9eb7c8;
+  --electric-text-hover: #00eaff;
+  --electric-glow: rgba(0,234,255,0.45);
+  --electric-cyan: #00eaff;
+
+  /* Tailwind @theme inline overrides for dark mode */
+  --color-background: #0a0f1a;
+  --color-foreground: #eef1f5;
+  --color-primary: #e0a84a;
+  --color-primary-light: #e0a84a;
+  --color-primary-lighter: #2a1f0a;
+  --color-primary-dark: #c99540;
+  --color-secondary: #00eaff;
+  --color-secondary-light: #0a2a3a;
+  --color-accent: #34d399;
+  --color-accent-light: #0a2a1a;
+  --color-warning: #fbbf24;
+  --color-warning-light: #2a2008;
+  --color-danger: #f87171;
+  --color-danger-light: #2a0a0a;
+  --color-card: rgba(15, 23, 42, 0.6);
+  --color-border: rgba(255, 255, 255, 0.08);
+  --color-muted: rgba(255, 255, 255, 0.04);
+  --color-text-secondary: #8fa0b3;
+}
+
+.dark body {
+  background: linear-gradient(135deg, #0a0f1a 0%, #0d1322 50%, #0f1a2e 100%);
+  color: #eef1f5;
+}
+
+/* Dark mode: fix native select/option backgrounds */
+.dark select option {
+  background: #0d1322;
+  color: #eef1f5;
+}
+.dark input,
+.dark textarea {
+  color-scheme: dark;
+}
+
+html, body {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+html {
+  height: 100%;
+  overscroll-behavior: none;
+}
+
+@layer components {
+  .card-shadow {
+    box-shadow: 0px 4px 12px rgba(0,0,0,0.05);
+  }
+  .card-shadow-hover {
+    box-shadow: 0px 8px 20px rgba(0,0,0,0.08);
+  }
+}
+
+/* ─── Full-screen safe area insets for PWA / mobile ─── */
+@layer utilities {
+  .pt-safe { padding-top: env(safe-area-inset-top); }
+  .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+  .pl-safe { padding-left: env(safe-area-inset-left); }
+  .pr-safe { padding-right: env(safe-area-inset-right); }
+  .h-screen-safe {
+    height: 100vh;
+    height: 100dvh;
+  }
+  .min-h-screen-safe {
+    min-height: 100vh;
+    min-height: 100dvh;
+  }
+}
+
+/* ─── Electric Navigation Effect ─── */
+/* Rotating conic-gradient border hidden behind a solid mask,
+   revealed only on hover/active. */
+
+/* Over-hero transparent state (homepage before scroll) */
+[data-over-hero="true"] {
+  --electric-bg: transparent;
+  --electric-text: #e2e8f0;
+}
+
+/* Nav link base */
+.electric-nav-item {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  padding: 10px 18px;
+  color: var(--electric-text);
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: 10px;
+  overflow: hidden;
+  transition: color 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease;
+  cursor: pointer;
+  background: transparent;
+}
+
+/* Electric border — rotating conic gradient (the visible ring) */
+.electric-nav-item::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    transparent 300deg,
+    var(--electric-cyan) 330deg,
+    #ffffff 345deg,
+    var(--electric-cyan) 355deg,
+    transparent 360deg
+  );
+  animation: electric 2s linear infinite;
+  opacity: 0;
+  z-index: 0;
+}
+
+/* Inner mask — solid fill that hides the gradient except at edges */
+.electric-nav-item::after {
+  content: "";
+  position: absolute;
+  inset: 2px;
+  background: var(--electric-bg);
+  border-radius: 8px;
+  z-index: 1;
+  pointer-events: none;
+}
+
+/* Hover — reveal electric border + glow */
+.electric-nav-item:hover {
+  color: var(--electric-text-hover);
+  transform: translateY(-2px);
+  box-shadow:
+    0 0 10px var(--electric-glow),
+    0 0 25px var(--electric-glow);
+}
+
+.electric-nav-item:hover::before {
+  opacity: 1;
+}
+
+/* Active — always show electric border */
+.electric-nav-item.active {
+  color: var(--electric-text-hover);
+  background: rgba(14,165,233,0.08);
+}
+
+.dark .electric-nav-item.active {
+  color: #fff;
+  background: rgba(0,234,255,0.08);
+}
+
+[data-over-hero="true"] .electric-nav-item.active {
+  color: #fff;
+  background: rgba(0,234,255,0.12);
+}
+
+.electric-nav-item.active::before {
+  opacity: 1;
+}
+
+@keyframes electric {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* ─── Electric Ring (for icon buttons) ─── */
+.electric-ring {
+  position: relative;
+  overflow: hidden;
+}
+
+.electric-ring::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    transparent 300deg,
+    var(--electric-cyan) 330deg,
+    #ffffff 345deg,
+    var(--electric-cyan) 355deg,
+    transparent 360deg
+  );
+  animation: electric 2s linear infinite;
+  opacity: 0;
+  z-index: 0;
+  transition: opacity 0.3s ease;
+}
+
+.electric-ring:hover::before {
+  opacity: 1;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+@keyframes heroZoom {
+  0%, 100% { transform: scale(1.05); }
+  50% { transform: scale(1.15); }
+}
+
+/* ─── Admin portal LIGHT MODE overrides ─── */
+/* Scoped to html:not(.dark) so dark mode is never affected */
+html:not(.dark) main {
+  color: #1e293b;
+}
+
+/* ── Cards: animated entrance + hover lift ── */
+html:not(.dark) main [class*="bg-white/[0."] {
+  background: #ffffff !important;
+  border: 1px solid rgba(0,0,0,0.06) !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 12px rgba(0,0,0,0.04) !important;
+  transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.3s ease, border-color 0.3s ease !important;
+  animation: admin-card-in 0.5s ease-out both;
+}
+html:not(.dark) main [class*="bg-white/[0."]:hover {
+  transform: translateY(-4px) scale(1.01) !important;
+  box-shadow: 0 8px 25px rgba(0,0,0,0.1), 0 12px 40px rgba(0,0,0,0.06) !important;
+  border-color: rgba(0,0,0,0.1) !important;
+}
+
+@keyframes admin-card-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Stagger per child */
+html:not(.dark) main [class*="bg-white/[0."]:nth-child(1) { animation-delay: 0ms; }
+html:not(.dark) main [class*="bg-white/[0."]:nth-child(2) { animation-delay: 60ms; }
+html:not(.dark) main [class*="bg-white/[0."]:nth-child(3) { animation-delay: 120ms; }
+html:not(.dark) main [class*="bg-white/[0."]:nth-child(4) { animation-delay: 180ms; }
+html:not(.dark) main [class*="bg-white/[0."]:nth-child(5) { animation-delay: 240ms; }
+html:not(.dark) main [class*="bg-white/[0."]:nth-child(6) { animation-delay: 300ms; }
+
+/* ── Text: rich slate colors ── */
+html:not(.dark) main .text-white:not(button) { color: #0f172a !important; }
+html:not(.dark) main .text-white\/80 { color: #1e293b !important; }
+html:not(.dark) main .text-white\/70 { color: #334155 !important; }
+html:not(.dark) main .text-white\/60 { color: #475569 !important; }
+html:not(.dark) main .text-white\/50 { color: #64748b !important; }
+html:not(.dark) main .text-white\/40 { color: #94a3b8 !important; }
+html:not(.dark) main .text-white\/30 { color: #94a3b8 !important; }
+
+/* ── Hardcoded dark bg → white + shadow ── */
+html:not(.dark) main [class*="bg-\[#0"] {
+  background: #ffffff !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06) !important;
+}
+html:not(.dark) main [class*="from-\[#0"] {
+  background: linear-gradient(135deg, #ffffff, #f8fafc) !important;
+}
+html:not(.dark) main [class*="via-\[#0"],
+html:not(.dark) main [class*="to-\[#0"] {
+  background: transparent !important;
+}
+
+/* ── Borders ── */
+html:not(.dark) main [class*="border-white"]       { border-color: rgba(0,0,0,0.06) !important; }
+html:not(.dark) main [class*="border-\[rgba(255"]  { border-color: rgba(0,0,0,0.08) !important; }
+
+/* ═══════════════════════════════════════════════════
+   DIALOG / MODAL / PORTAL light-mode overrides
+   These elements render OUTSIDE <main> via Radix portals
+   ═══════════════════════════════════════════════════ */
+
+/* Dialog backdrop */
+html:not(.dark) [data-radix-dialog-overlay] {
+  background: rgba(0,0,0,0.4) !important;
+}
+
+/* Dialog content panels */
+html:not(.dark) [role="dialog"],
+html:not(.dark) [data-radix-dialog-content] {
+  background: #ffffff !important;
+  color: #1e293b !important;
+  border-color: rgba(0,0,0,0.08) !important;
+  box-shadow: 0 25px 60px rgba(0,0,0,0.15) !important;
+}
+
+/* Any element inside a dialog with hardcoded dark bg */
+html:not(.dark) [role="dialog"] [class*="bg-card"],
+html:not(.dark) [role="dialog"] [class*="bg-white"] {
+  background: #ffffff !important;
+  border-color: rgba(0,0,0,0.06) !important;
+}
+
+/* Text inside dialogs */
+html:not(.dark) [role="dialog"] .text-white,
+html:not(.dark) [data-radix-dialog-content] .text-white {
+  color: #1e293b !important;
+}
+html:not(.dark) [role="dialog"] .text-white\/80,
+html:not(.dark) [data-radix-dialog-content] .text-white\/80 {
+  color: #334155 !important;
+}
+html:not(.dark) [role="dialog"] .text-white\/60,
+html:not(.dark) [data-radix-dialog-content] .text-white\/60 {
+  color: #64748b !important;
+}
+html:not(.dark) [role="dialog"] .text-white\/50,
+html:not(.dark) [data-radix-dialog-content] .text-white\/50 {
+  color: #64748b !important;
+}
+html:not(.dark) [role="dialog"] .text-white\/40,
+html:not(.dark) [data-radix-dialog-content] .text-white\/40 {
+  color: #94a3b8 !important;
+}
+
+/* Borders inside dialogs */
+html:not(.dark) [role="dialog"] [class*="border-white"],
+html:not(.dark) [data-radix-dialog-content] [class*="border-white"] {
+  border-color: rgba(0,0,0,0.06) !important;
+}
+html:not(.dark) [role="dialog"] [class*="border-\[rgba(255"],
+html:not(.dark) [data-radix-dialog-content] [class*="border-\[rgba(255"] {
+  border-color: rgba(0,0,0,0.08) !important;
+}
+
+/* Hardcoded dark bg inside dialogs */
+html:not(.dark) [role="dialog"] [class*="bg-\[#0"],
+html:not(.dark) [data-radix-dialog-content] [class*="bg-\[#0"] {
+  background: #ffffff !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06) !important;
+}
+
+/* Dropdown menus (also portals) */
+html:not(.dark) [role="menu"],
+html:not(.dark) [data-radix-dropdown-menu-content] {
+  background: #ffffff !important;
+  color: #1e293b !important;
+  border-color: rgba(0,0,0,0.08) !important;
+}
+html:not(.dark) [role="menu"] [class*="bg-\[#0"],
+html:not(.dark) [data-radix-dropdown-menu-content] [class*="bg-\[#0"] {
+  background: #ffffff !important;
+}
+html:not(.dark) [role="menu"] .text-white,
+html:not(.dark) [data-radix-dropdown-menu-content] .text-white {
+  color: #1e293b !important;
+}
+html:not(.dark) [role="menu"] [class*="border-white"],
+html:not(.dark) [data-radix-dropdown-menu-content] [class*="border-white"] {
+  border-color: rgba(0,0,0,0.06) !important;
+}
+
+/* ── Buttons: bounce ── */
+html:not(.dark) main button[class*="bg-gradient"],
+html:not(.dark) main a[class*="bg-gradient"] {
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12) !important;
+  transition: transform 0.2s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.2s ease, filter 0.2s ease !important;
+}
+html:not(.dark) main button[class*="bg-gradient"]:hover,
+html:not(.dark) main a[class*="bg-gradient"]:hover {
+  transform: translateY(-2px) scale(1.03) !important;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.15) !important;
+  filter: brightness(1.08) !important;
+}
+html:not(.dark) main button[class*="bg-gradient"]:active,
+html:not(.dark) main a[class*="bg-gradient"]:active {
+  transform: translateY(0) scale(0.98) !important;
+}
+
+/* ── Colored accent cards: glow + bounce ── */
+html:not(.dark) main [class*="from-emerald"] {
+  box-shadow: 0 2px 12px rgba(16,185,129,0.18), 0 0 0 1px rgba(16,185,129,0.08) !important;
+  transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.3s ease !important;
+}
+html:not(.dark) main [class*="from-emerald"]:hover {
+  transform: translateY(-4px) scale(1.02) !important;
+  box-shadow: 0 8px 25px rgba(16,185,129,0.25), 0 0 0 1px rgba(16,185,129,0.15) !important;
+}
+html:not(.dark) main [class*="from-blue"] {
+  box-shadow: 0 2px 12px rgba(59,130,246,0.18), 0 0 0 1px rgba(59,130,246,0.08) !important;
+  transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.3s ease !important;
+}
+html:not(.dark) main [class*="from-blue"]:hover {
+  transform: translateY(-4px) scale(1.02) !important;
+  box-shadow: 0 8px 25px rgba(59,130,246,0.25), 0 0 0 1px rgba(59,130,246,0.15) !important;
+}
+html:not(.dark) main [class*="from-amber"] {
+  box-shadow: 0 2px 12px rgba(245,158,11,0.18), 0 0 0 1px rgba(245,158,11,0.08) !important;
+  transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.3s ease !important;
+}
+html:not(.dark) main [class*="from-amber"]:hover {
+  transform: translateY(-4px) scale(1.02) !important;
+  box-shadow: 0 8px 25px rgba(245,158,11,0.25), 0 0 0 1px rgba(245,158,11,0.15) !important;
+}
+html:not(.dark) main [class*="from-purple"] {
+  box-shadow: 0 2px 12px rgba(139,92,246,0.18), 0 0 0 1px rgba(139,92,246,0.08) !important;
+  transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.3s ease !important;
+}
+html:not(.dark) main [class*="from-purple"]:hover {
+  transform: translateY(-4px) scale(1.02) !important;
+  box-shadow: 0 8px 25px rgba(139,92,246,0.25), 0 0 0 1px rgba(139,92,246,0.15) !important;
+}
+html:not(.dark) main [class*="from-rose"] {
+  box-shadow: 0 2px 12px rgba(244,63,94,0.18), 0 0 0 1px rgba(244,63,94,0.08) !important;
+  transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.3s ease !important;
+}
+html:not(.dark) main [class*="from-rose"]:hover {
+  transform: translateY(-4px) scale(1.02) !important;
+  box-shadow: 0 8px 25px rgba(244,63,94,0.25), 0 0 0 1px rgba(244,63,94,0.15) !important;
+}
+html:not(.dark) main [class*="from-cyan"] {
+  box-shadow: 0 2px 12px rgba(6,182,212,0.18), 0 0 0 1px rgba(6,182,212,0.08) !important;
+  transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.3s ease !important;
+}
+html:not(.dark) main [class*="from-cyan"]:hover {
+  transform: translateY(-4px) scale(1.02) !important;
+  box-shadow: 0 8px 25px rgba(6,182,212,0.25), 0 0 0 1px rgba(6,182,212,0.15) !important;
+}
+
+/* ── Select/option ── */
+html:not(.dark) main select,
+html:not(.dark) main option {
+  background: #ffffff !important;
+  color: #1e293b !important;
+}
+
+/* ── Recharts ── */
+html:not(.dark) .recharts-tooltip-wrapper {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08) !important;
+  border-radius: 12px !important;
+}
+html:not(.dark) .recharts-tooltip-item { color: #1e293b !important; }
+html:not(.dark) .recharts-cartesian-grid line { stroke: #e2e8f0 !important; }
+html:not(.dark) .recharts-text { fill: #64748b !important; }
+html:not(.dark) .recharts-default-tooltip {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 12px !important;
+}
+
+/* ── Table rows ── */
+html:not(.dark) main tr {
+  transition: background 0.2s ease, transform 0.2s ease !important;
+}
+html:not(.dark) main tr:hover {
+  background: rgba(59,130,246,0.04) !important;
+  transform: scale(1.005);
+}
+
+/* ── Status badges ── */
+html:not(.dark) main [class*="bg-emerald-500"] { background: #10b981 !important; color: #fff !important; }
+html:not(.dark) main [class*="bg-blue-500"]    { background: #3b82f6 !important; color: #fff !important; }
+html:not(.dark) main [class*="bg-amber-500"]   { background: #f59e0b !important; color: #fff !important; }
+html:not(.dark) main [class*="bg-red-500"]     { background: #ef4444 !important; color: #fff !important; }
+html:not(.dark) main [class*="bg-purple-500"]  { background: #8b5cf6 !important; color: #fff !important; }
+html:not(.dark) main [class*="bg-cyan-500"]    { background: #06b6d4 !important; color: #fff !important; }
+
+/* ─── Auth Login Backdrop (night desert) ─── */
+/* ═══════════════════════════════════════════════════
+   AUTH BACKGROUND — Earth from satellite (both modes)
+   ═══════════════════════════════════════════════════ */
+
+/* Deep space — always visible */
+.auth-space {
+  position: fixed;
+  inset: 0;
+  background: #050510;
+  z-index: 0;
+  transition: background 0.5s ease;
+}
+
+/* Light mode: soft atmosphere sky */
+html:not(.dark) .auth-space {
+  background: linear-gradient(180deg, #87CEEB 0%, #B0E0E6 25%, #E0F0FF 50%, #F0F8FF 70%, #FFFFFF 100%);
+}
+
+/* Stars layer */
+.auth-stars {
+  position: fixed;
+  inset: 0;
+  background-image:
+    radial-gradient(1.5px 1.5px at 15% 12%, rgba(255,255,255,.9) 50%, transparent 51%),
+    radial-gradient(1px 1px at 72% 8%, rgba(255,255,255,.7) 50%, transparent 51%),
+    radial-gradient(1.5px 1.5px at 55% 28%, rgba(255,255,255,.8) 50%, transparent 51%),
+    radial-gradient(1px 1px at 88% 18%, rgba(255,255,255,.6) 50%, transparent 51%),
+    radial-gradient(1.5px 1.5px at 30% 6%, rgba(255,255,255,.7) 50%, transparent 51%),
+    radial-gradient(1px 1px at 8% 40%, rgba(255,255,255,.5) 50%, transparent 51%),
+    radial-gradient(1.5px 1.5px at 82% 48%, rgba(255,255,255,.6) 50%, transparent 51%),
+    radial-gradient(1px 1px at 45% 5%, rgba(255,255,255,.8) 50%, transparent 51%),
+    radial-gradient(1.2px 1.2px at 65% 55%, rgba(255,255,255,.55) 50%, transparent 51%),
+    radial-gradient(1px 1px at 25% 65%, rgba(255,255,255,.45) 50%, transparent 51%),
+    radial-gradient(1.5px 1.5px at 92% 72%, rgba(255,255,255,.5) 50%, transparent 51%),
+    radial-gradient(1px 1px at 50% 85%, rgba(255,255,255,.35) 50%, transparent 51%);
+  background-repeat: repeat;
+  background-size: 500px 500px;
+  animation: auth-star-twinkle 8s ease-in-out infinite;
+  z-index: 1;
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+
+.dark .auth-stars {
+  opacity: 1;
+}
+
+@keyframes auth-star-twinkle {
+  0%, 100% { opacity: .6; }
+  50% { opacity: 1; }
+}
+
+/* Nebula / cosmic dust */
+.auth-nebula {
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at 20% 30%, rgba(30,60,120,.25) 0%, transparent 50%),
+    radial-gradient(ellipse at 75% 60%, rgba(80,40,100,.15) 0%, transparent 40%),
+    radial-gradient(ellipse at 50% 80%, rgba(20,60,80,.12) 0%, transparent 45%);
+  z-index: 1;
+  animation: auth-nebula-drift 30s ease-in-out infinite alternate;
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+
+.dark .auth-nebula {
+  opacity: 1;
+}
+
+@keyframes auth-nebula-drift {
+  0% { transform: translate(0, 0) scale(1); }
+  100% { transform: translate(2vw, -1vh) scale(1.05); }
+}
+
+/* ── Moon (dark mode only) — top left ── */
+.auth-moon {
+  position: fixed;
+  top: -12vw;
+  left: -12vw;
+  width: 46vw;
+  height: 46vw;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, #ffffff 0%, #eef1f2 35%, #c9cfd6 60%, #9aa1ab 100%);
+  box-shadow: 0 0 12vw 4vw rgba(220,228,255,.18);
+  z-index: 2;
+  opacity: 0;
+  transition: opacity 0.5s ease;
+  pointer-events: none;
+}
+
+.dark .auth-moon {
+  opacity: 1;
+}
+
+.auth-moon-craters {
+  position: fixed;
+  top: -12vw;
+  left: -12vw;
+  width: 46vw;
+  height: 46vw;
+  border-radius: 50%;
+  z-index: 2;
+  opacity: 0;
+  transition: opacity 0.5s ease;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 30% 70%, rgba(0,0,0,.12) 0%, transparent 8%),
+    radial-gradient(circle at 65% 30%, rgba(0,0,0,.10) 0%, transparent 10%),
+    radial-gradient(circle at 55% 60%, rgba(0,0,0,.08) 0%, transparent 7%),
+    radial-gradient(circle at 25% 40%, rgba(0,0,0,.09) 0%, transparent 6%),
+    radial-gradient(circle at 72% 55%, rgba(0,0,0,.07) 0%, transparent 5%),
+    radial-gradient(circle at 42% 25%, rgba(0,0,0,.06) 0%, transparent 4%);
+}
+
+.dark .auth-moon-craters {
+  opacity: 1;
+}
+
+.auth-moonglow {
+  position: fixed;
+  top: -6vw;
+  left: -6vw;
+  width: 34vw;
+  height: 34vw;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255,255,255,.55) 0%, rgba(255,255,255,0) 70%);
+  mix-blend-mode: screen;
+  animation: auth-moonbreathe 9s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 2;
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+
+.dark .auth-moonglow {
+  opacity: 1;
+}
+
+@keyframes auth-moonbreathe {
+  0%, 100% { opacity: .5; transform: scale(1); }
+  50% { opacity: .9; transform: scale(1.12); }
+}
+
+/* ── The Sun — top right, behind the Earth ── */
+.auth-sun {
+  position: fixed;
+  top: -10vw;
+  right: -10vw;
+  width: 38vw;
+  height: 38vw;
+  min-width: 300px;
+  min-height: 300px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 50%,
+    #fff8e1 0%,
+    #ffe082 15%,
+    #ffb74d 35%,
+    #ff9800 55%,
+    rgba(255,152,0,0) 75%);
+  box-shadow:
+    0 0 80px 40px rgba(255,200,50,.35),
+    0 0 160px 80px rgba(255,160,0,.15),
+    0 0 300px 120px rgba(255,120,0,.08);
+  z-index: 2;
+  animation: auth-sun-pulse 6s ease-in-out infinite;
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+
+html:not(.dark) .auth-sun {
+  opacity: 1;
+}
+
+.dark .auth-sun {
+  opacity: 0;
+}
+
+@keyframes auth-sun-pulse {
+  0%, 100% { transform: scale(1); filter: brightness(1); }
+  50% { transform: scale(1.04); filter: brightness(1.1); }
+}
+
+/* Sun corona rays */
+.auth-sun-corona {
+  position: fixed;
+  top: -15vw;
+  right: -15vw;
+  width: 48vw;
+  height: 48vw;
+  min-width: 380px;
+  min-height: 380px;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg, rgba(255,200,80,.12) 5deg, transparent 10deg,
+    transparent 30deg, rgba(255,180,60,.08) 35deg, transparent 40deg,
+    transparent 60deg, rgba(255,210,100,.1) 65deg, transparent 70deg,
+    transparent 90deg, rgba(255,190,70,.09) 95deg, transparent 100deg,
+    transparent 120deg, rgba(255,200,80,.11) 125deg, transparent 130deg,
+    transparent 150deg, rgba(255,170,50,.08) 155deg, transparent 160deg,
+    transparent 180deg, rgba(255,210,90,.1) 185deg, transparent 190deg,
+    transparent 210deg, rgba(255,180,60,.09) 215deg, transparent 220deg,
+    transparent 240deg, rgba(255,200,80,.11) 245deg, transparent 250deg,
+    transparent 270deg, rgba(255,190,70,.08) 275deg, transparent 280deg,
+    transparent 300deg, rgba(255,210,100,.1) 305deg, transparent 310deg,
+    transparent 330deg, rgba(255,180,60,.09) 335deg, transparent 340deg,
+    transparent 360deg
+  );
+  z-index: 2;
+  pointer-events: none;
+  animation: auth-corona-spin 45s linear infinite;
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+
+html:not(.dark) .auth-sun-corona {
+  opacity: 1;
+}
+
+.dark .auth-sun-corona {
+  opacity: 0;
+}
+
+@keyframes auth-corona-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Sun lens flare */
+.auth-sun-flare {
+  position: fixed;
+  top: 5vh;
+  right: 18vw;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255,240,200,.5) 0%, rgba(255,200,100,.2) 40%, transparent 70%);
+  z-index: 3;
+  pointer-events: none;
+  animation: auth-flare-pulse 4s ease-in-out infinite;
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+
+html:not(.dark) .auth-sun-flare {
+  opacity: 1;
+}
+
+.dark .auth-sun-flare {
+  opacity: 0;
+}
+
+@keyframes auth-flare-pulse {
+  0%, 100% { opacity: .4; transform: scale(1); }
+  50% { opacity: .7; transform: scale(1.15); }
+}
+
+/* ── Earth globe — bottom right ── */
+.auth-earth-container {
+  position: fixed;
+  bottom: -18vw;
+  right: -12vw;
+  width: 55vw;
+  height: 55vw;
+  min-width: 400px;
+  min-height: 400px;
+  max-width: 700px;
+  max-height: 700px;
+  z-index: 4;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+
+html:not(.dark) .auth-earth-container {
+  opacity: 1;
+}
+
+.dark .auth-earth-container {
+  opacity: 0;
+}
+
+.auth-earth {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  overflow: hidden;
+  background:
+    /* Ocean base */
+    radial-gradient(circle at 50% 50%, #0a4a7a 0%, #0d5fa0 20%, #084370 50%, #062d4f 80%, #041e35 100%);
+  box-shadow:
+    inset -40px -20px 80px rgba(0,0,0,.6),
+    0 0 60px 20px rgba(30,100,180,.2);
+  animation: auth-earth-rotate 120s linear infinite;
+}
+
+/* Continent textures via pseudo-elements */
+.auth-earth::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background:
+    /* Africa-like landmass */
+    radial-gradient(ellipse 18% 25% at 52% 45%, #2d7a3a 0%, #1e6b2e 40%, transparent 70%),
+    radial-gradient(ellipse 10% 15% at 48% 38%, #3a8f48 0%, transparent 60%),
+    /* Europe-like */
+    radial-gradient(ellipse 14% 10% at 50% 28%, #4a9a55 0%, #3a8a45 40%, transparent 65%),
+    /* South America */
+    radial-gradient(ellipse 12% 22% at 30% 58%, #2d7a3a 0%, transparent 60%),
+    /* North America */
+    radial-gradient(ellipse 16% 14% at 25% 30%, #3a8f48 0%, transparent 55%),
+    /* Asia */
+    radial-gradient(ellipse 20% 16% at 68% 32%, #4a9a55 0%, #3a8a45 40%, transparent 60%),
+    /* Australia */
+    radial-gradient(ellipse 8% 6% at 75% 62%, #8a7a40 0%, transparent 55%),
+    /* Desert regions */
+    radial-gradient(ellipse 8% 6% at 52% 40%, #c4a855 0%, transparent 50%),
+    radial-gradient(ellipse 10% 5% at 58% 35%, #b89840 0%, transparent 50%);
+  animation: auth-earth-surface 120s linear infinite;
+}
+
+/* Cloud layer */
+.auth-earth-clouds {
+  position: absolute;
+  inset: -2%;
+  border-radius: 50%;
+  background:
+    radial-gradient(ellipse 30% 8% at 40% 35%, rgba(255,255,255,.25) 0%, transparent 70%),
+    radial-gradient(ellipse 25% 6% at 60% 50%, rgba(255,255,255,.2) 0%, transparent 65%),
+    radial-gradient(ellipse 20% 10% at 35% 55%, rgba(255,255,255,.18) 0%, transparent 60%),
+    radial-gradient(ellipse 35% 7% at 55% 30%, rgba(255,255,255,.22) 0%, transparent 68%),
+    radial-gradient(ellipse 15% 5% at 70% 42%, rgba(255,255,255,.15) 0%, transparent 55%);
+  animation: auth-clouds-drift 40s linear infinite;
+}
+
+@keyframes auth-earth-rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes auth-earth-surface {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes auth-clouds-drift {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(-360deg); }
+}
+
+/* Atmosphere glow ring */
+.auth-earth-atmosphere {
+  position: absolute;
+  inset: -4%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 50%,
+    transparent 44%,
+    rgba(80,160,255,.08) 47%,
+    rgba(100,180,255,.18) 50%,
+    rgba(80,160,255,.08) 53%,
+    transparent 56%);
+  pointer-events: none;
+  animation: auth-atmo-breathe 5s ease-in-out infinite;
+}
+
+@keyframes auth-atmo-breathe {
+  0%, 100% { opacity: .7; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.01); }
+}
+
+/* ── Light mode: warm sunlight wash over light atmosphere ── */
+.auth-light-overlay {
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(ellipse at 75% 10%, rgba(255,220,100,.12) 0%, rgba(255,200,80,.06) 30%, transparent 60%);
+  z-index: 1;
+  opacity: 0;
+  transition: opacity 0.5s ease;
+  pointer-events: none;
+}
+
+html:not(.dark) .auth-light-overlay {
+  opacity: 1;
+}
+
+/* Glassmorphism login card */
+.auth-card {
+  position: relative;
+  z-index: 2;
+  width: min(90vw, 400px);
+  padding: 34px 32px 28px;
+  background: rgba(255,255,255,.75);
+  backdrop-filter: blur(24px) saturate(1.3);
+  -webkit-backdrop-filter: blur(24px) saturate(1.3);
+  border: 1px solid rgba(0,0,0,.08);
+  border-radius: 26px;
+  box-shadow: 0 30px 80px rgba(0,0,0,.12);
+  color: #1e293b;
+  transform: rotateY(var(--ry, 0deg)) translateZ(0);
+  transition: transform .15s ease-out, background 0.3s ease, border-color 0.3s ease, color 0.3s ease;
+}
+
+.dark .auth-card {
+  background: rgba(18,23,38,.55);
+  border: 1px solid rgba(255,255,255,.18);
+  box-shadow: 0 30px 80px rgba(0,0,0,.55);
+  color: #eef1f7;
+}
+
+.auth-card h1 {
+  font-size: 24px;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.auth-card .subtitle {
+  font-size: 13.5px;
+  color: #64748b;
+  margin-bottom: 24px;
+}
+
+.dark .auth-card .subtitle {
+  color: #93a0b8;
+}
+
+/* Floating label field */
+.auth-field {
+  position: relative;
+  margin-bottom: 16px;
+}
+
+.auth-field input {
+  width: 100%;
+  padding: 20px 14px 8px;
+  background: rgba(0,0,0,.04);
+  border: 1px solid rgba(0,0,0,.12);
+  border-radius: 12px;
+  color: #1e293b;
+  font-size: 14.5px;
+  outline: none;
+  transition: border-color .2s ease, background .2s ease;
+}
+
+.auth-field input:focus {
+  border-color: #6d7cff;
+  background: rgba(0,0,0,.06);
+}
+
+.dark .auth-field input {
+  background: rgba(255,255,255,.04);
+  border: 1px solid rgba(255,255,255,.14);
+  color: #eef1f7;
+}
+
+.dark .auth-field input:focus {
+  background: rgba(255,255,255,.06);
+}
+
+.auth-field label {
+  position: absolute;
+  left: 14px;
+  top: 14px;
+  font-size: 14.5px;
+  color: #64748b;
+  pointer-events: none;
+  transition: all .15s ease;
+}
+
+.dark .auth-field label {
+  color: #93a0b8;
+}
+
+.auth-field input:focus + label,
+.auth-field input:not(:placeholder-shown) + label {
+  top: 7px;
+  font-size: 10.5px;
+  letter-spacing: .03em;
+  color: #6d7cff;
+}
+
+.auth-toggle-pw {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #64748b;
+  padding: 4px;
+  display: flex;
+}
+
+.dark .auth-toggle-pw {
+  color: #93a0b8;
+}
+
+.auth-toggle-pw svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* Sign-in button with door animation */
+.auth-btn {
+  position: relative;
+  width: 100%;
+  height: 50px;
+  border: none;
+  border-radius: 14px;
+  cursor: pointer;
+  background: linear-gradient(135deg, #6d7cff, #4a5cf0);
+  color: #0b0e1a;
+  font-size: 15px;
+  font-weight: 700;
+  overflow: hidden;
+  transition: background .4s ease, transform .15s ease;
+}
+
+.auth-btn:hover { transform: translateY(-1px); }
+.auth-btn:active { transform: translateY(0); }
+
+.auth-btn .label { position: relative; z-index: 2; }
+
+.auth-btn .scene {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 34px;
+  height: 20px;
+  z-index: 2;
+}
+
+.auth-btn .walker {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 6px;
+  height: 16px;
+  background: #0b0e1a;
+  border-radius: 3px 3px 0 0;
+  transition: transform .6s cubic-bezier(.6,0,.4,1), opacity .3s ease;
+}
+
+.auth-btn .door {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 12px;
+  height: 18px;
+  border: 2px solid #0b0e1a;
+  border-radius: 2px;
+  background: transparent;
+  transform-origin: left center;
+  transition: transform .5s ease;
+}
+
+.auth-btn.dooropen .door { transform: perspective(40px) rotateY(-55deg); }
+.auth-btn.dooropen .walker { transform: translateX(26px); }
+.auth-btn.out .walker { opacity: 0; }
+.auth-btn.out .door { opacity: .4; }
+.auth-btn.success {
+  background: linear-gradient(135deg, #2dd4bf, #10b981);
+}
+.auth-btn.success .label::before { content: "\2713 "; }
+
+.auth-status {
+  text-align: center;
+  font-size: 12.5px;
+  color: #93a0b8;
+  height: 16px;
+  margin-top: 10px;
+  opacity: 0;
+  transition: opacity .25s ease;
+}
+
+.auth-status.show { opacity: 1; }
+
+/* Divider */
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #64748b;
+  font-size: 12px;
+  margin: 20px 0 16px;
+}
+
+.dark .auth-divider {
+  color: #93a0b8;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: rgba(0,0,0,.12);
+}
+
+.dark .auth-divider::before,
+.dark .auth-divider::after {
+  background: rgba(255,255,255,.14);
+}
+
+/* OAuth buttons */
+.auth-oauth {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.auth-oauth button {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 11px;
+  border-radius: 12px;
+  border: 1px solid rgba(0,0,0,.12);
+  background: rgba(0,0,0,.03);
+  color: #1e293b;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .2s ease;
+}
+
+.auth-oauth button:hover { background: rgba(0,0,0,.06); }
+
+.dark .auth-oauth button {
+  border: 1px solid rgba(255,255,255,.14);
+  background: rgba(255,255,255,.03);
+  color: #eef1f7;
+}
+
+.dark .auth-oauth button:hover { background: rgba(255,255,255,.08); }
+.auth-oauth svg { width: 16px; height: 16px; }
+
+/* Footnote */
+.auth-footnote {
+  text-align: center;
+  font-size: 13px;
+  color: #64748b;
+}
+
+.dark .auth-footnote {
+  color: #93a0b8;
+}
+
+.auth-footnote a {
+  color: #6d7cff;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.auth-footnote a:hover { text-decoration: underline; }
+
+/* Tab switcher for login type */
+.auth-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 20px;
+  background: rgba(255,255,255,.04);
+  border-radius: 12px;
+  padding: 4px;
+  border: 1px solid rgba(255,255,255,.08);
+}
+
+.auth-tab {
+  flex: 1;
+  padding: 8px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all .2s ease;
+}
+
+.dark .auth-tab {
+  color: #93a0b8;
+}
+
+.auth-tab.active {
+  background: rgba(109,124,255,.15);
+  color: #6d7cff;
+}
+
+.auth-tab:hover:not(.active) {
+  color: #1e293b;
+}
+
+.dark .auth-tab:hover:not(.active) {
+  color: #eef1f7;
+}
+
+/* Remember row */
+.auth-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  color: #64748b;
+  margin-bottom: 20px;
+}
+
+.dark .auth-row {
+  color: #93a0b8;
+}
+
+.auth-row label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+}
+
+.auth-row input[type="checkbox"] {
+  accent-color: #6d7cff;
+  width: 14px;
+  height: 14px;
+}
+
+.auth-row a {
+  color: #64748b;
+  text-decoration: none;
+}
+
+.auth-row a:hover { color: #1e293b; }
+
+.dark .auth-row a {
+  color: #93a0b8;
+}
+
+.dark .auth-row a:hover { color: #eef1f7; }
+
+/* ─── Facility sliding background ─── */
+.facility-slide-track {
+  display: flex;
+  width: max-content;
+  animation: facility-slide 30s linear infinite;
+}
+
+.facility-slide-item {
+  flex: 0 0 33.333vw;
+  height: 100%;
+  min-height: 500px;
+}
+
+@keyframes facility-slide {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-33.333%); }
+}
+
+/* Pause on hover */
+.facility-slide-track:hover {
+  animation-play-state: paused;
+}
+
+/* ─── Print styles (medical invoices, receipts) ─── */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 12mm;
+  }
+  body {
+    background: #ffffff !important;
+  }
+  aside, nav, header, footer, .print\:hidden {
+    display: none !important;
+  }
+  main {
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: 100% !important;
+  }
+  .print\:p-0 {
+    padding: 0 !important;
+  }
+  /* Neutralise the app's dark backgrounds so printed documents
+     (invoices, receipts) are clean white from top to footer —
+     the dark gradient must not bleed into the empty space below
+     the document content or onto a trailing page. */
+  .bg-gradient-to-br,
+  .bg-gradient-to-r,
+  [class*="from-[#0a0f1a]"],
+  [class*="via-[#0d1322]"],
+  [class*="to-[#0f1a2e]"],
+  [class*="bg-[#0d1322]"],
+  [class*="bg-[#0f1a2e]"] {
+    background: #ffffff !important;
+  }
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
+

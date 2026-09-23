@@ -1,0 +1,181 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { FileText, HeartPulse, FlaskRound, Pill, ChevronDown, ChevronUp, Calendar, User, Stethoscope, Syringe, Scan, ShieldCheck } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { useMedicalRecords } from "@/hooks/use-medical-records";
+import DoctorNotesSection from "@/components/DoctorNotesSection";
+import MedicalReportsSection from "@/components/MedicalReportsSection";
+import type { MedicalRecord } from "@/lib/api-types";
+
+const typeConfig: Record<string, { icon: React.ElementType; color: string; bg: string }> = {
+  diagnosis: { icon: HeartPulse, color: "text-blue-400", bg: "bg-blue-500/10" },
+  lab_result: { icon: FlaskRound, color: "text-emerald-400", bg: "bg-emerald-500/10" },
+  prescription: { icon: Pill, color: "text-amber-400", bg: "bg-amber-500/10" },
+  surgery_report: { icon: Stethoscope, color: "text-rose-400", bg: "bg-rose-500/10" },
+  vaccination: { icon: Syringe, color: "text-violet-400", bg: "bg-violet-500/10" },
+  imaging: { icon: Scan, color: "text-cyan-400", bg: "bg-cyan-500/10" },
+};
+
+const typeLabels: Record<string, string> = {
+  diagnosis: "Diagnosis",
+  lab_result: "Lab",
+  prescription: "Prescription",
+  surgery_report: "Surgery",
+  vaccination: "Vaccination",
+  imaging: "Imaging",
+};
+
+export default function RecordsPage() {
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const { data: records, loading } = useMedicalRecords();
+  const [ownPatient, setOwnPatient] = useState<{ id: string; name: string; address?: string; phone?: string } | null>(null);
+
+  useEffect(() => {
+    fetch("/api/patients")
+      .then((r) => r.json())
+      .then((json) => {
+        if (json.success && json.data?.[0]) {
+          const p = json.data[0];
+          setOwnPatient({
+            id: p.id,
+            name: p.user ? `${p.user.first_name} ${p.user.last_name}` : "Patient",
+            address: [p.address, p.city, p.state].filter(Boolean).join(", ") || undefined,
+            phone: p.user?.phone || undefined,
+          });
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const toggle = (id: string) => {
+    setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  if (loading) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-bold text-foreground">Medical Records</h2>
+          <FileText className="w-5 h-5 text-[#e0a84a]" />
+        </div>
+        <div className="space-y-4">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="rounded-2xl border border-border bg-card p-4 animate-pulse">
+              <div className="space-y-2">
+                <div className="h-4 bg-muted rounded w-1/3" />
+                <div className="h-3 bg-muted rounded w-1/2" />
+                <div className="h-3 bg-muted rounded w-1/4" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  const sortedRecords = (records ?? [])
+    .slice()
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+  const getDoctorName = (record: MedicalRecord) => {
+    if (record.staff?.user) {
+      return `Dr. ${record.staff.user.first_name} ${record.staff.user.last_name.charAt(0)}.`;
+    }
+    return record.staff_id || "Doctor";
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-bold text-foreground">Medical Records</h2>
+        <FileText className="w-5 h-5 text-[#e0a84a]" />
+      </div>
+
+      {sortedRecords.length > 0 ? (
+        <div className="relative">
+          <div className="absolute left-4 top-2 bottom-2 w-px bg-gradient-to-b from-[#e0a84a]/30 via-border to-transparent" />
+
+          <div className="space-y-4">
+            {sortedRecords.map((record) => {
+              const config = typeConfig[record.record_type] || { icon: FileText, color: "text-muted-foreground", bg: "bg-muted" };
+              const isOpen = expanded[record.id];
+              const Icon = config.icon;
+
+              return (
+                <div key={record.id} className="relative pl-10">
+                  <div className={cn("absolute left-2.5 w-5 h-5 rounded-xl flex items-center justify-center z-10 border border-border", config.bg)}>
+                    <Icon className={cn("w-3 h-3", config.color)} />
+                  </div>
+
+                  <button
+                    onClick={() => toggle(record.id)}
+                    className={cn(
+                      "w-full text-left rounded-2xl border border-border bg-card backdrop-blur-xl p-4 transition-all duration-300",
+                      "hover:border-white/[0.12] hover:-translate-y-0.5 hover:shadow-lg hover:shadow-[#e0a84a]/5"
+                    )}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full border border-border", config.bg, config.color)}>
+                            {typeLabels[record.record_type] || record.record_type}
+                          </span>
+                          <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+                            <Calendar className="w-3 h-3" />
+                            {new Date(record.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                          </span>
+                        </div>
+                        <h4 className="text-sm font-semibold text-foreground">{record.title}</h4>
+                        <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
+                          <User className="w-3 h-3" />
+                          {getDoctorName(record)}
+                        </p>
+                      </div>
+                      {isOpen ? (
+                        <ChevronUp className="w-4 h-4 text-muted-foreground/60 shrink-0 mt-1 transition-transform" />
+                      ) : (
+                        <ChevronDown className="w-4 h-4 text-muted-foreground/60 shrink-0 mt-1 transition-transform" />
+                      )}
+                    </div>
+
+                    {isOpen && (
+                      <div className="mt-3 pt-3 border-t border-border">
+                        <p className="text-xs text-foreground/60 leading-relaxed">{record.notes || record.description || "No additional notes."}</p>
+                      </div>
+                    )}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-border bg-card backdrop-blur-xl p-6 text-center">
+          <FileText className="w-8 h-8 text-muted-foreground/60 mx-auto mb-2" />
+          <p className="text-sm text-muted-foreground">No medical records found.</p>
+        </div>
+      )}
+
+      {/* Clinical Notes */}
+      <div className="pt-2">
+        <h3 className="flex items-center gap-2 text-lg font-bold text-foreground mb-3">
+          <HeartPulse className="w-5 h-5 text-[#e0a84a]" /> Clinical Notes
+        </h3>
+        {ownPatient && (
+          <DoctorNotesSection patientId="family" patientName={ownPatient.name} />
+        )}
+      </div>
+
+      {/* Medical Reports */}
+      <div className="pt-2">
+        <h3 className="flex items-center gap-2 text-lg font-bold text-foreground mb-3">
+          <ShieldCheck className="w-5 h-5 text-[#e0a84a]" /> Medical Reports
+        </h3>
+        {ownPatient && (
+          <MedicalReportsSection patientId="family" patient={ownPatient} canWrite={false} />
+        )}
+      </div>
+    </div>
+  );
+}

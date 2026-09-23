@@ -34,6 +34,31 @@
 
 ---
 
+## 2b. Fixes applied 2026-09-10 (login + admin portal)
+
+- **Remote DB `is_admin()` was corrupted** (failed with `cannot cast type boolean to
+  user_role`) — broke every RLS query on `organizations`/`users` for non-admins:
+  patient login, `/api/auth/me`, and the admin sidebar (it rendered empty). Fixed via
+  migration `20260910000001_fix_role_helper_functions.sql` (recreates `is_admin`,
+  `is_staff`, `is_accounting`, `user_org_id` from migration 0002).
+- **Wrong hardcoded org id** (`a0000000-0000-0000-0000-000000000001`) in
+  `register`, `callback`, `setup-super-admin` routes → new signups/Google login broke.
+  Now resolved via `getDefaultOrgId()` in `src/lib/org-settings.ts`.
+- **Patient Login gate restored**: middleware no longer force-redirects logged-in users
+  away from `/login` (it was bouncing them to `/admin`). See `src/lib/supabase/middleware.ts`.
+- **Sidebar role lists cleaned** in `role-access.ts` / `rbac.ts` (removed duplicated
+  `"admin"` entries left by a botched role rename).
+- **Admin access restored**: `admin@lifeblossom.com.ng` password reset to
+  `DemoPass123!` (documented demo); `olalekan.edun@gmail.com`'s missing `users` row
+  restored via migration `20260910000002_fix_super_admin_profile.sql`.
+- ⚠️ Open items: `adeolu.adesanya@gmail.com` has an **unconfirmed email** (cannot sign
+  in until confirmed — confirm via Supabase Auth). The `setup-super-admin` route
+  hardcodes `olalekan.edun@gmail.com` / `Obadina11@` in source — change/remove before
+  the repo ever goes public. `delete.txt` at repo root contains the DB password — keep
+  it out of any commit.
+
+---
+
 ## 3. Decisions Log (locked unless the founder changes them)
 
 | # | Decision | Why | Locked? |

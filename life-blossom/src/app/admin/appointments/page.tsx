@@ -1,0 +1,372 @@
+"use client";
+
+import { useState, useMemo } from "react";
+import { useRouter } from "next/navigation";
+import { Plus, Clock, CheckCircle2, XCircle, Calendar, User, Stethoscope, Loader2, Search, X } from "lucide-react";
+import { emitDashboardRefresh } from "@/lib/dashboard-events";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { cn, formatDate } from "@/lib/utils";
+import { useAppointments, useCreateAppointment } from "@/hooks/use-appointments";
+import { usePatients } from "@/hooks/use-patients";
+import { useStaff } from "@/hooks/use-staff";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+
+type DisplayStatus = "Upcoming" | "Confirmed" | "Completed" | "Cancelled" | "Unattended";
+
+const statusStyles: Record<DisplayStatus, { icon: React.ElementType }> = {
+  Upcoming: { icon: Clock },
+  Confirmed: { icon: CheckCircle2 },
+  Completed: { icon: CheckCircle2 },
+  Cancelled: { icon: XCircle },
+  Unattended: { icon: XCircle },
+};
+
+function mapStatus(apiStatus: string): DisplayStatus {
+  switch (apiStatus) {
+    case "scheduled": return "Upcoming";
+    case "confirmed": case "in_progress": return "Confirmed";
+    case "completed": return "Completed";
+    case "cancelled": return "Cancelled";
+    case "no_show": return "Unattended";
+    default: return "Upcoming";
+  }
+}
+
+function getDoctorName(apt: any): string {
+  const doc = apt.doctor || apt.staff;
+  if (doc?.user) return `${doc.user.first_name} ${doc.user.last_name}`;
+  return apt.doctor_id || apt.staff_id || "—";
+}
+
+function getDepartment(apt: any): string {
+  const doc = apt.doctor || apt.staff;
+  return doc?.department || "General";
+}
+
+export default function AppointmentsPage() {
+  const router = useRouter();
+  const [tab, setTab] = useState("all");
+  const [search, setSearch] = useState("");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+  const { data: appointmentsData, loading, refresh } = useAppointments();
+  const { data: patientsData } = usePatients();
+  const { data: staffData } = useStaff();
+  const { mutate: createAppointment, loading: creating } = useCreateAppointment();
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
+  const [newApt, setNewApt] = useState({ patient_id: "", doctor_id: "", appointment_date: "", start_time: "", reason: "" });
+  const [createError, setCreateError] = useState("");
+  const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
+
+  function showToast(type: "success" | "error", message: string) {
+    setToast({ type, message });
+    setTimeout(() => setToast(null), 3500);
+  }
+
+  const appointments = useMemo(() => {
+    if (!appointmentsData) return [];
+    return appointmentsData.map((apt: any) => ({
+      ...apt,
+      _displayStatus: mapStatus(apt.status),
+      patientName: apt.patient?.user
+        ? `${apt.patient.user.first_name} ${apt.patient.user.last_name}`
+        : apt.patient_id,
+      doctorName: getDoctorName(apt),
+      department: getDepartment(apt),
+    }));
+  }, [appointmentsData]);
+
+  const filtered = appointments.filter((a) => {
+    if (tab === "upcoming") {
+      if (!["scheduled", "confirmed", "in_progress"].includes(a.status)) return false;
+    } else if (tab !== "all") {
+      if (a._displayStatus.toLowerCase() !== tab) return false;
+    }
+    const date = a.appointment_date ? a.appointment_date.slice(0, 10) : "";
+    if (fromDate && date < fromDate) return false;
+    if (toDate && date > toDate) return false;
+    if (search) {
+      const q = search.toLowerCase();
+      const haystack = [
+        a.patientName,
+        a.patient?.patient_number || "",
+        a.patient?.user?.phone || "",
+        a.doctorName,
+        a.department,
+        date,
+        a.start_time || "",
+        a.reason || "",
+        a._displayStatus,
+      ].join(" ").toLowerCase();
+      if (!haystack.includes(q)) return false;
+    }
+    return true;
+  });
+
+  async function updateStatus(apt: typeof appointments[number], newStatus: string) {
+    setActionLoading(apt.id);
+    try {
+      const res = await fetch(`/api/appointments/${apt.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || "Update failed");
+      refresh();
+      emitDashboardRefresh("appointments");
+      const label = newStatus.charAt(0).toUpperCase() + newStatus.slice(1);
+      showToast("success", `Appointment ${label.toLowerCase()} for ${apt.patientName}`);
+    } catch (err: any) {
+      showToast("error", err.message || "Failed to update appointment");
+    }
+    finally { setActionLoading(null); }
+  }
+
+  async function handleCreate(e: React.FormEvent) {
+    e.preventDefault();
+    setCreateError("");
+    if (!newApt.patient_id || !newApt.appointment_date || !newApt.start_time) {
+      setCreateError("Patient, date, and start time are required");
+      return;
+    }
+    try {
+      await createAppointment(newApt as any);
+      setShowCreate(false);
+      setNewApt({ patient_id: "", doctor_id: "", appointment_date: "", start_time: "", reason: "" });
+      refresh();
+      emitDashboardRefresh("appointments");
+    } catch (err: any) { setCreateError(err.message); }
+  }
+
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Appointments</h1>
+          <p className="text-sm text-muted-foreground mt-1">Schedule and manage patient appointments</p>
+        </div>
+        <Button onClick={() => setShowCreate(true)}
+          className="bg-gradient-to-r from-[#e0a84a] to-amber-500 text-[#0a0f1a] font-semibold border-0">
+          <Plus className="size-4" />New Appointment
+        </Button>
+      </div>
+
+      {/* Search + date range filter */}
+      <div className="flex flex-col lg:flex-row lg:items-center gap-3">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground/60" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by patient name, number, doctor, date..."
+            className="pl-9 bg-muted border-border text-foreground/80 placeholder:text-white/30 focus-visible:border-[#e0a84a]/40 focus-visible:ring-[#e0a84a]/20"
+          />
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs text-muted-foreground/60 shrink-0">From:</span>
+          <Input
+            type="date"
+            value={fromDate}
+            onChange={(e) => setFromDate(e.target.value)}
+            className="w-auto h-9 text-sm bg-muted border-border text-foreground focus-visible:border-[#e0a84a]/40"
+          />
+          <span className="text-xs text-muted-foreground/60 shrink-0">To:</span>
+          <Input
+            type="date"
+            value={toDate}
+            onChange={(e) => setToDate(e.target.value)}
+            className="w-auto h-9 text-sm bg-muted border-border text-foreground focus-visible:border-[#e0a84a]/40"
+          />
+          {(search || fromDate || toDate) && (
+            <button
+              onClick={() => { setSearch(""); setFromDate(""); setToDate(""); }}
+              className="inline-flex items-center gap-1 h-9 px-3 rounded-xl text-xs text-muted-foreground hover:text-foreground hover:bg-white/[0.06] transition-colors"
+            >
+              <X className="size-3.5" /> Clear
+            </button>
+          )}
+        </div>
+      </div>
+
+      <Tabs value={tab} onValueChange={setTab}>
+        <TabsList className="bg-muted border border-border">
+          {["all", "upcoming", "confirmed", "completed", "cancelled", "unattended"].map((t) => (
+            <TabsTrigger key={t} value={t}
+              className="capitalize data-[state=active]:bg-white/[0.08] data-[state=active]:text-foreground text-muted-foreground">
+              {t}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+
+        <TabsContent value={tab} className="mt-4">
+          {loading ? (
+            <div className="flex items-center justify-center py-20">
+              <Loader2 className="size-6 animate-spin text-[#e0a84a]" />
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="py-16 text-center text-sm text-muted-foreground/60">
+              No {tab === "all" ? "" : tab} appointments found.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {filtered.map((apt) => {
+                const style = statusStyles[apt._displayStatus as DisplayStatus];
+                const Icon = style.icon;
+                const loading = actionLoading === apt.id;
+
+                return (
+                  <Card key={apt.id} className="border-border bg-card backdrop-blur-xl hover:border-white/[0.12] transition-all">
+                    <CardContent className="p-4 sm:p-5">
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                        <div className="flex sm:flex-col items-center gap-2 sm:gap-1 sm:w-20 shrink-0">
+                          <div className={cn(
+                            "flex items-center justify-center rounded-full size-9",
+                            apt._displayStatus === "Upcoming" ? "bg-amber-500/10 text-amber-400"
+                              : apt._displayStatus === "Confirmed" ? "bg-emerald-500/10 text-emerald-400"
+                              : apt._displayStatus === "Completed" ? "bg-emerald-500/10 text-emerald-400"
+                              : apt._displayStatus === "Unattended" ? "bg-orange-500/10 text-orange-400"
+                              : "bg-rose-500/10 text-rose-400"
+                          )}>
+                            <Icon className="size-5" />
+                          </div>
+                           <span className="text-sm font-semibold text-foreground">{apt.start_time?.slice(0, 5) || "—"}</span>
+                        </div>
+
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                             <span className="text-sm font-semibold text-foreground">{apt.patientName}</span>
+                            <Badge className={cn("text-[10px]",
+                              apt._displayStatus === "Upcoming" ? "bg-amber-500/10 text-amber-400 border-amber-500/20"
+                                : apt._displayStatus === "Confirmed" ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                                : apt._displayStatus === "Completed" ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                                : apt._displayStatus === "Unattended" ? "bg-orange-500/10 text-orange-400 border-orange-500/20"
+                                : "bg-rose-500/10 text-rose-400 border-rose-500/20"
+                            )}>{apt._displayStatus}</Badge>
+                          </div>
+                           <div className="flex items-center gap-4 mt-1.5 text-xs text-muted-foreground flex-wrap">
+                            <span className="flex items-center gap-1"><User className="size-3.5" />{apt.doctorName}</span>
+                            <span className="flex items-center gap-1"><Calendar className="size-3.5" />{formatDate(apt.appointment_date)}</span>
+                            <span className="flex items-center gap-1"><Stethoscope className="size-3.5" />{apt.department}</span>
+                          </div>
+                        </div>
+
+                        {apt._displayStatus === "Upcoming" && (
+                          <div className="flex items-center gap-2 shrink-0">
+                            <Button size="sm" disabled={loading} onClick={() => updateStatus(apt, "confirmed")}
+                              className="h-8 text-xs bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20">Confirm</Button>
+                            <Button size="sm" variant="ghost" disabled={loading} onClick={() => updateStatus(apt, "cancelled")}
+                              className="h-8 text-xs text-rose-400 hover:bg-white/[0.06]">Cancel</Button>
+                          </div>
+                        )}
+                        {apt._displayStatus === "Confirmed" && (
+                          <div className="flex items-center gap-2 shrink-0">
+                            <Button size="sm" disabled={loading} onClick={() => updateStatus(apt, "completed")}
+                              className="h-8 text-xs bg-[#e0a84a]/10 text-[#e0a84a] border border-[#e0a84a]/20 hover:bg-[#e0a84a]/20">Complete</Button>
+                            <Button size="sm" variant="ghost" disabled={loading} onClick={() => updateStatus(apt, "cancelled")}
+                              className="h-8 text-xs text-rose-400 hover:bg-white/[0.06]">Cancel</Button>
+                          </div>
+                        )}
+                        {apt._displayStatus === "Completed" && (
+                          <Badge variant="outline" className="shrink-0 text-[11px] border-emerald-500/20 text-emerald-400 bg-emerald-500/5">Done</Badge>
+                        )}
+                        {apt._displayStatus === "Unattended" && (
+                          <Badge variant="outline" className="shrink-0 text-[11px] border-orange-500/20 text-orange-400 bg-orange-500/5">Unattended</Badge>
+                        )}
+                        {apt._displayStatus === "Cancelled" && (
+                          <Badge variant="outline" className="shrink-0 text-[11px] border-rose-500/20 text-rose-400 bg-rose-500/5">Cancelled</Badge>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
+
+      {/* Create Appointment Modal */}
+      <Dialog open={showCreate} onOpenChange={(o) => { if (!creating) { setShowCreate(o); setCreateError(""); } }}>
+        <DialogContent className="sm:max-w-md border-border bg-card backdrop-blur-xl text-foreground">
+          <DialogHeader><DialogTitle className="text-foreground">New Appointment</DialogTitle></DialogHeader>
+          <form onSubmit={handleCreate} className="space-y-4">
+            <div>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">Patient *</label>
+              <select value={newApt.patient_id} onChange={(e) => setNewApt({ ...newApt, patient_id: e.target.value })}
+                className="flex h-10 w-full rounded-xl border border-border bg-muted px-3 py-2 text-sm text-foreground" required>
+                <option value="" className="bg-card">Select patient…</option>
+                {(patientsData || []).map((p) => (
+                  <option key={p.id} value={p.id} className="bg-card">
+                    {p.user?.first_name} {p.user?.last_name} ({p.patient_number})
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">Doctor</label>
+              <select value={newApt.doctor_id} onChange={(e) => setNewApt({ ...newApt, doctor_id: e.target.value })}
+                className="flex h-10 w-full rounded-xl border border-border bg-muted px-3 py-2 text-sm text-foreground">
+                <option value="" className="bg-card">Select doctor…</option>
+                {(staffData || []).filter((s) => s.user?.role === "doctor").map((s) => (
+                  <option key={s.id} value={s.id} className="bg-card">
+                    Dr. {s.user?.first_name} {s.user?.last_name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">Date *</label>
+                <Input type="date" value={newApt.appointment_date}
+                  onChange={(e) => setNewApt({ ...newApt, appointment_date: e.target.value })}
+                  className="bg-muted border-border text-foreground" required />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">Time *</label>
+                <Input type="time" value={newApt.start_time}
+                  onChange={(e) => setNewApt({ ...newApt, start_time: e.target.value })}
+                  className="bg-muted border-border text-foreground" required />
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">Reason</label>
+              <Input value={newApt.reason} onChange={(e) => setNewApt({ ...newApt, reason: e.target.value })}
+                placeholder="e.g. Annual checkup" className="bg-muted border-border text-foreground" />
+            </div>
+            {createError && <div className="rounded-xl bg-rose-500/10 border border-rose-500/20 px-3 py-2 text-sm text-rose-400">{createError}</div>}
+            <DialogFooter>
+              <DialogClose asChild>
+                <Button type="button" variant="outline" className="bg-white text-black border-border hover:bg-gray-100">Cancel</Button>
+              </DialogClose>
+              <Button type="submit" disabled={creating}
+                className="bg-gradient-to-r from-[#e0a84a] to-amber-500 text-[#0a0f1a] font-semibold border-0">
+                {creating ? "Creating..." : "Create Appointment"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Toast notification */}
+      {toast && (
+        <div className={cn(
+          "fixed bottom-6 right-6 z-50 px-4 py-3 rounded-xl shadow-2xl border text-sm font-medium transition-all animate-in slide-in-from-right",
+          toast.type === "success" ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" : "bg-rose-500/10 border-rose-500/20 text-rose-400"
+        )}>
+          <span className="flex items-center gap-2">
+            {toast.type === "success" ? <CheckCircle2 className="size-4" /> : <XCircle className="size-4" />}
+            {toast.message}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}

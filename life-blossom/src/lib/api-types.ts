@@ -1,0 +1,495 @@
+// ============================================================================
+// Database types — mirrors schema.sql exactly
+// ============================================================================
+
+export type UserRole = "patient" | "admin" | "doctor" | "nurse" | "accountant" | "cashier" | "receptionist" | "lab_technician" | "pharmacist" | "radiographer" | "radiologist";
+export type AppointmentStatus = "scheduled" | "confirmed" | "in_progress" | "completed" | "cancelled" | "no_show";
+export type AppointmentType = "in_person" | "video_call";
+export type RecordType = "diagnosis" | "lab_result" | "prescription" | "surgery_report" | "vaccination" | "imaging";
+export type PrescriptionStatus = "active" | "completed" | "cancelled";
+export type MedicationRoute = "oral" | "iv" | "intramuscular" | "topical" | "sublingual" | "inhalation" | "rectal";
+export type InvoiceStatus = "draft" | "pending" | "paid" | "partially_paid" | "cancelled" | "void" | "refunded";
+export type PaymentMethod = "cash" | "card" | "transfer" | "insurance" | "mobile_money";
+export type PaymentStatus = "pending" | "completed" | "failed" | "refunded" | "cancelled";
+export type NotificationType = "appointment_reminder" | "payment_due" | "lab_result" | "prescription_refill" | "general" | "chat_message" | "payment_declared" | "payment_confirmed" | "payment_cancelled";
+export type AuditAction = "create" | "update" | "delete" | "view" | "login" | "logout";
+
+// --- Organization ---
+export interface Organization {
+  id: string;
+  name: string;
+  slug: string;
+  logo_url: string | null;
+  settings: Record<string, unknown>;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+// --- User ---
+export interface User {
+  id: string;
+  org_id: string;
+  email: string;
+  role: UserRole;
+  first_name: string;
+  last_name: string;
+  phone: string | null;
+  avatar_url: string | null;
+  is_active: boolean;
+  last_login_at: string | null;
+  created_at: string;
+  updated_at: string;
+  /** Present when role === 'patient' — family/account info from GET /api/auth/me. */
+  patient?: {
+    id: string;
+    patient_number: string;
+    is_primary_account: boolean;
+    primary_account_id: string | null;
+    is_dependant: boolean;
+  };
+}
+
+// --- Patient (extends User where role='patient') ---
+export interface Patient {
+  id: string;
+  org_id: string;
+  user_id: string;
+  patient_number: string;
+  date_of_birth: string | null;
+  gender: string | null;
+  marital_status?: string;
+  blood_group: string | null;
+  genotype?: string;
+  medical_plan?: string;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  emergency_contact_name: string | null;
+  emergency_contact_phone: string | null;
+  insurance_provider: string | null;
+  insurance_number: string | null;
+  is_primary_account?: boolean;
+  primary_account_id?: string | null;
+  dependant_relationship?: string | null;
+  created_at: string;
+  updated_at: string;
+  user?: User;
+}
+
+// --- Dependant (a patient row with primary_account_id set) ---
+export interface Dependant {
+  id: string;
+  primary_account_id: string;
+  patient_number: string;
+  family_code: string;
+  full_name: string;
+  date_of_birth: string | null;
+  gender: string | null;
+  blood_group: string | null;
+  genotype: string | null;
+  allergies: string | null;
+  relationship: string | null;
+  phone: string | null;
+  avatar_url: string | null;
+  created_at: string;
+  status: "active" | "needs_attention";
+  outstanding: number;
+  pending_invoices: number;
+}
+
+// --- Staff (extends User where role in doctor/nurse/admin/accountant) ---
+export interface Staff {
+  id: string;
+  org_id: string;
+  user_id: string;
+  employee_code: string;
+  first_name: string;
+  last_name: string;
+  role: string;
+  title: string | null;
+  specialty: string | null;
+  phone: string | null;
+  email: string;
+  department_id: string | null;
+  date_joined: string | null;
+  availability: Record<string, unknown>;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  user?: User;
+  // Legacy aliases (pages may still reference these)
+  specialization?: string | null;
+  department?: string | null;
+  staff_number?: string;
+  on_leave_until?: string | null;
+  available_from?: string | null;
+  available_until?: string | null;
+  is_available?: boolean;
+}
+
+// --- Appointment ---
+export interface Appointment {
+  id: string;
+  org_id: string;
+  patient_id: string;
+  doctor_id: string | null;
+  department_id: string | null;
+  scheduled_at: string;
+  duration_minutes: number | null;
+  status: AppointmentStatus;
+  reason: string | null;
+  notes: string | null;
+  created_by: string | null;
+  cancelled_at: string | null;
+  cancelled_by: string | null;
+  created_at: string;
+  updated_at: string;
+  patient?: Patient;
+  doctor?: Staff;
+  staff?: Staff;
+  // Derived from scheduled_at by the API
+  appointment_date: string;
+  start_time: string;
+}
+
+// --- Medical Record ---
+export interface MedicalRecord {
+  id: string;
+  org_id: string;
+  patient_id: string;
+  staff_id: string;
+  appointment_id: string | null;
+  record_type: RecordType;
+  title: string;
+  description: string | null;
+  diagnosis: string | null;
+  notes: string | null;
+  attachments: Array<{ name: string; url: string; type: string }>;
+  is_confidential: boolean;
+  created_at: string;
+  updated_at: string;
+  patient?: Patient;
+  staff?: Staff;
+}
+
+// --- Prescription ---
+export interface Prescription {
+  id: string;
+  org_id: string;
+  patient_id: string;
+  doctor_id: string;
+  appointment_id: string | null;
+  diagnosis: string | null;
+  notes: string | null;
+  status: PrescriptionStatus;
+  created_at: string;
+  updated_at: string;
+  items?: PrescriptionItem[];
+  patient?: Patient;
+  doctor?: Staff;
+}
+
+// --- Prescription Item ---
+export interface PrescriptionItem {
+  id: string;
+  prescription_id: string;
+  medication_name: string;
+  dosage: string;
+  frequency: string;
+  duration: string | null;
+  route: MedicationRoute;
+  quantity: number | null;
+  refills_remaining: number;
+  instructions: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// --- Invoice ---
+export interface Invoice {
+  id: string;
+  org_id: string;
+  patient_id: string;
+  appointment_id: string | null;
+  invoice_number: string;
+  issue_date: string;
+  subtotal: number;
+  tax: number;
+  discount: number;
+  total: number;
+  paid_amount: number;
+  status: InvoiceStatus;
+  due_date: string | null;
+  notes: string | null;
+  attending_staff_id: string | null;
+  attending_staff?: {
+    id: string;
+    first_name: string;
+    last_name: string;
+    role: string;
+    avatar_url?: string | null;
+  } | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  items?: InvoiceItem[];
+  payments?: Payment[];
+  patient?: Patient;
+}
+
+// --- Invoice Item ---
+export interface InvoiceItem {
+  id: string;
+  invoice_id: string;
+  description: string;
+  quantity: number;
+  unit_price: number;
+  vat_percent: number;
+  vat_amount: number;
+  line_total: number;
+  created_at: string;
+}
+
+// --- Payment ---
+export interface Payment {
+  id: string;
+  org_id: string;
+  invoice_id: string;
+  patient_id: string;
+  amount: number;
+  payment_method: PaymentMethod;
+  transaction_ref: string | null;
+  status: PaymentStatus;
+  payment_date: string;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  invoice?: Invoice;
+}
+
+// --- Notification ---
+export interface Notification {
+  id: string;
+  org_id: string;
+  user_id: string;
+  type: NotificationType;
+  title: string;
+  body: string | null;
+  is_read: boolean;
+  link: string | null;
+  created_at: string;
+  read_at: string | null;
+}
+
+// --- Internal Mail ---
+export interface InternalMessage {
+  id: string;
+  org_id: string;
+  sender_id: string;
+  subject: string;
+  body: string;
+  is_broadcast: boolean;
+  broadcast_scope: "staff" | "all" | null;
+  created_at: string;
+  sender?: User;
+  recipients?: InternalMessageRecipient[];
+}
+
+export interface InternalMessageRecipient {
+  id: string;
+  message_id: string;
+  recipient_id: string;
+  is_read: boolean;
+  read_at: string | null;
+  created_at: string;
+  recipient?: User;
+}
+
+// --- Real-time Chat ---
+export interface ChatOtherUser {
+  id: string;
+  first_name: string;
+  last_name: string;
+  role: string;
+  avatar_url: string | null;
+  phone: string | null;
+  specialization?: string | null;
+  staff_number?: string | null;
+  is_dependant?: boolean;
+}
+
+export interface Chat {
+  id: string;
+  patient_id: string | null;
+  staff_user_id: string;
+  recipient_user_id: string | null;
+  last_message: string | null;
+  last_sender_id: string | null;
+  last_message_at: string | null;
+  created_at: string;
+  updated_at: string;
+  unread_count: number;
+  other_user: ChatOtherUser | null;
+}
+
+export interface ChatDirectoryEntry {
+  id: string;
+  patient_id?: string | null;
+  user_id?: string;
+  first_name: string;
+  last_name: string;
+  role: string;
+  avatar_url: string | null;
+  specialization?: string | null;
+  staff_number?: string | null;
+  is_dependant?: boolean;
+}
+
+export interface ChatListResponse {
+  chats: Chat[];
+  directory: ChatDirectoryEntry[];
+  online: string[];
+  caller_role: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  chat_id: string;
+  sender_id: string;
+  message: string;
+  is_read: boolean;
+  created_at: string;
+}
+
+export interface ChatWindowResponse {
+  messages: ChatMessage[];
+  chat_id: string;
+  other_user: ChatOtherUser | null;
+  has_more: boolean;
+}
+
+export interface CreateChatResponse {
+  chat: {
+    id: string;
+    patient_id: string | null;
+    staff_user_id: string;
+    recipient_user_id: string | null;
+    last_message: string | null;
+    last_sender_id: string | null;
+    last_message_at: string | null;
+    created_at: string;
+    updated_at: string;
+  };
+  other_user: ChatOtherUser | null;
+}
+
+// --- Doctor's Clinical Visit Notes ---
+export interface DoctorNoteVitals {
+  bp?: string;
+  weight?: string;
+  height?: string;
+  temperature?: string;
+  cholesterol?: string;
+  heart_rate?: string;
+  respiratory_rate?: string;
+  allergies?: string;
+}
+
+export interface DoctorNoteTests {
+  ecg?: string;
+  xray?: string;
+  blood_test?: string;
+  urine_test?: string;
+  saliva_test?: string;
+  other_tests?: string;
+}
+
+export interface DoctorNoteDiagnosis {
+  primary?: string;
+  secondary?: string[];
+  suspected?: string[];
+}
+
+export interface DoctorNoteMedication {
+  drug_name: string;
+  dosage: string;
+  frequency: string;
+  duration: string;
+}
+
+export interface DoctorNote {
+  id: string;
+  org_id: string;
+  patient_id: string;
+  doctor_id: string | null;
+  appointment_id: string | null;
+  visit_date: string;
+  vitals: DoctorNoteVitals;
+  tests_procedures: DoctorNoteTests;
+  clinical_findings: string | null;
+  diagnosis: DoctorNoteDiagnosis;
+  medications: DoctorNoteMedication[];
+  treatment_recommendations: string | null;
+  next_visit_date: string | null;
+  next_visit_reason: string | null;
+  is_confidential: boolean;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  doctor?: Staff;
+}
+
+// --- Audit Log ---
+export interface AuditLog {
+  id: string;
+  org_id: string;
+  user_id: string | null;
+  action: AuditAction;
+  entity_type: string;
+  entity_id: string | null;
+  old_values: Record<string, unknown> | null;
+  new_values: Record<string, unknown> | null;
+  ip_address: string | null;
+  user_agent: string | null;
+  created_at: string;
+}
+
+// --- API Response envelopes ---
+export interface ApiResponse<T> {
+  success: boolean;
+  data?: T;
+  error?: string;
+  count?: number;
+}
+
+// --- Role Permissions ---
+export interface RolePermission {
+  id: string;
+  org_id: string;
+  role: string;
+  module: string;
+  can_view: boolean;
+  can_create: boolean;
+  can_edit: boolean;
+  can_delete: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CustomRole {
+  id: string;
+  org_id: string;
+  name: string;
+  description: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// --- Auth ---
+export interface AuthResponse {
+  user: User | null;
+  session: unknown;
+  organization?: Organization;
+}

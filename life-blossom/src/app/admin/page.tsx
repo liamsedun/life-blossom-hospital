@@ -1,0 +1,615 @@
+"use client";
+
+import { useState, useEffect, useMemo } from "react";
+import {
+  DollarSign, Users, Calendar, AlertTriangle,
+  TrendingUp, TrendingDown, Plus, Stethoscope, FileText, ArrowUpRight, Loader2, PieChart,
+  Receipt, Wallet, Sun, Moon,
+} from "lucide-react";
+import { useRouter } from "next/navigation";
+import {
+  LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  PieChart as RePieChart, Pie, Cell, Legend,
+} from "recharts";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { cn, formatCurrency, formatDate } from "@/lib/utils";
+import { useAppointments } from "@/hooks/use-appointments";
+import { usePatients } from "@/hooks/use-patients";
+import { useStaff } from "@/hooks/use-staff";
+import { useInvoices } from "@/hooks/use-billing";
+import { useAuth } from "@/contexts/auth-context";
+import { listenDashboardRefresh } from "@/lib/dashboard-events";
+
+const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+const PERIODS = ["1 Week", "2 Weeks", "1 Month", "Last Quarter", "This Quarter", "6-Months", "1 Year"];
+
+/** Revenue-generating invoice statuses (all except cancelled, void, draft, refunded) */
+function isRevenueInvoice(i: { status: string }) {
+  return i.status !== "cancelled" && i.status !== "void" && i.status !== "draft" && i.status !== "refunded";
+}
+
+function Trend({ up, value }: { up: boolean; value: string }) {
+  return (
+    <span className={cn("inline-flex items-center gap-0.5 text-xs font-medium", up ? "text-emerald-400" : "text-red-400")}>
+      {up ? <TrendingUp className="size-3" /> : <TrendingDown className="size-3" />}
+      {value}
+    </span>
+  );
+}
+
+function GradientCard({ children, gradient, className }: { children: React.ReactNode; gradient: string; className?: string }) {
+  return (
+    <div className={cn("relative group", className)}>
+      <div className={cn("absolute inset-0 rounded-2xl opacity-20 blur-xl transition-opacity duration-500 group-hover:opacity-30", gradient)} />
+      <div className={cn("relative rounded-2xl border border-white/[0.06] bg-white/[0.03] backdrop-blur-xl p-5 overflow-hidden", className)}>
+        <div className={cn("absolute top-0 right-0 w-48 h-48 -translate-y-1/2 translate-x-1/2 rounded-full opacity-10", gradient)} />
+        {children}
+      </div>
+    </div>
+  );
+}
+
+interface OtherIncomeRecord {
+  id: string;
+  description: string;
+  category: string;
+  amount: number;
+  income_date: string;
+}
+
+export default function AdminDashboard() {
+  const router = useRouter();
+  const { user } = useAuth();
+  const { data: appointmentsData, loading: loadingAppts, refresh: refreshAppts } = useAppointments();
+  const { data: patientsData, loading: loadingPatients, refresh: refreshPatients } = usePatients();
+  const { data: staffData, loading: loadingStaff, refresh: refreshStaff } = useStaff();
+  const { data: invoicesData, loading: loadingInvoices, refresh: refreshInvoices } = useInvoices();
+
+  const [otherIncomeData, setOtherIncomeData] = useState<OtherIncomeRecord[]>([]);
+  const [loadingOtherIncome, setLoadingOtherIncome] = useState(true);
+  const [periodExpenses, setPeriodExpenses] = useState<number>(0);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  const now = new Date();
+  const defaultMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const [selectedMonth, setSelectedMonth] = useState(defaultMonth);
+  const [period, setPeriod] = useState("1 Month");
+  const [expensesByMonth, setExpensesByMonth] = useState<number>(0);
+  const [loadingExpenses, setLoadingExpenses] = useState(false);
+
+  const periodBounds = useMemo(() => {
+    const end = new Date();
+    let start = new Date();
+    const y = end.getFullYear();
+    const m = end.getMonth();
+    switch (period) {
+      case "1 Week": start = new Date(end.getTime() - 7 * 86400000); break;
+      case "2 Weeks": start = new Date(end.getTime() - 14 * 86400000); break;
+      case "Last Quarter": start = new Date(y, m - 3, 1); break;
+      case "This Quarter": start = new Date(y, Math.floor(m / 3) * 3, 1); break;
+      case "6-Months": start = new Date(end.getTime() - 180 * 86400000); break;
+      case "1 Year": start = new Date(end.getTime() - 365 * 86400000); break;
+      default: start = new Date(y, m, 1); break;
+    }
+    const len = end.getTime() - start.getTime();
+    return { start, end, prevStart: new Date(start.getTime() - len) };
+  }, [period]);
+
+  useEffect(() => {
+    const from = periodBounds.start.toISOString().split("T")[0];
+    const to = periodBounds.end.toISOString().split("T")[0];
+    fetch(`/api/expenses?from=${from}&to=${to}&page_size=1000`)
+      .then((r) => r.json())
+      .then((json) => {
+        if (json.success) {
+          const total = (json.data || []).reduce((s: number, e: any) => s + e.amount, 0);
+          setPeriodExpenses(total);
+        }
+      })
+      .catch(() => {});
+  }, [periodBounds]);
+
+  // Re-fetch other-income and expenses when refreshKey changes
+  useEffect(() => {
+    setLoadingOtherIncome(true);
+    fetch("/api/other-income?page_size=500")
+      .then((r) => r.json())
+      .then((json) => { if (json.success) setOtherIncomeData(json.data || []); })
+      .catch(() => {})
+      .finally(() => setLoadingOtherIncome(false));
+  }, [refreshKey]);
+
+  useEffect(() => {
+    if (!selectedMonth) return;
+    setLoadingExpenses(true);
+    const [y, m] = selectedMonth.split("-").map(Number);
+    const from = `${y}-${String(m).padStart(2, "0")}-01`;
+    const to = new Date(y, m, 0).toISOString().split("T")[0];
+    fetch(`/api/expenses?from=${from}&to=${to}&page_size=500`)
+      .then((r) => r.json())
+      .then((json) => {
+        if (json.success) {
+          const total = (json.data || []).reduce((s: number, e: any) => s + e.amount, 0);
+          setExpensesByMonth(total);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoadingExpenses(false));
+  }, [selectedMonth, refreshKey]);
+
+  // Listen for dashboard refresh events from any portal action
+  useEffect(() => {
+    return listenDashboardRefresh(() => {
+      refreshAppts();
+      refreshPatients();
+      refreshStaff();
+      refreshInvoices();
+      setRefreshKey((k) => k + 1);
+    }, ["*"]);
+  }, [refreshAppts, refreshPatients, refreshStaff, refreshInvoices]);
+
+  const loading = loadingAppts || loadingPatients || loadingStaff || loadingInvoices || loadingOtherIncome;
+
+  const { totalRevenue, medicalRevenue, otherRevenue, newPatients, appointmentsInPeriod, outstandingPayments, staffCount, revenueTrendPct, revenueUp } = useMemo(() => {
+    const allMed = (invoicesData || [])
+      .filter(isRevenueInvoice)
+      .reduce((sum, i) => sum + i.total, 0);
+    const allOth = otherIncomeData.reduce((sum, r) => sum + r.amount, 0);
+    const { start, end, prevStart } = periodBounds;
+    const inRange = (d: Date) => d >= start && d < end;
+    const inPrev = (d: Date) => d >= prevStart && d < start;
+
+    const medRev = (invoicesData || [])
+      .filter((i) => isRevenueInvoice(i) && inRange(new Date(i.created_at)))
+      .reduce((sum, i) => sum + i.total, 0);
+    const othRev = otherIncomeData.filter((r) => inRange(new Date(r.income_date))).reduce((sum, r) => sum + r.amount, 0);
+
+    const prevMed = (invoicesData || [])
+      .filter((i) => isRevenueInvoice(i) && inPrev(new Date(i.created_at)))
+      .reduce((sum, i) => sum + i.total, 0);
+    const prevOth = otherIncomeData.filter((r) => inPrev(new Date(r.income_date))).reduce((sum, r) => sum + r.amount, 0);
+    const prevTotal = prevMed + prevOth;
+    const curTotal = medRev + othRev;
+
+    const newPatients = (patientsData || []).filter((p) => inRange(new Date(p.created_at))).length;
+    const appointmentsInPeriod = (appointmentsData || []).filter((a) => inRange(new Date(a.appointment_date))).length;
+
+    const allOutstanding = (invoicesData || [])
+      .filter((i) => (i.status === "pending" || i.status === "partially_paid"))
+      .reduce((sum, i) => sum + (i.total - (i.paid_amount || 0)), 0);
+
+    return {
+      totalRevenue: curTotal,
+      medicalRevenue: allMed,
+      otherRevenue: allOth,
+      newPatients,
+      appointmentsInPeriod,
+      outstandingPayments: allOutstanding,
+      staffCount: staffData?.length ?? 0,
+      revenueTrendPct: prevTotal > 0 ? ((curTotal - prevTotal) / prevTotal * 100).toFixed(1) : "0",
+      revenueUp: curTotal >= prevTotal,
+    };
+  }, [invoicesData, otherIncomeData, appointmentsData, patientsData, staffData, periodBounds]);
+
+  const revenueBreakdown = useMemo(() => [
+    { name: "Medical Services", value: medicalRevenue, color: "#e0a84a" },
+    { name: "Other Income", value: otherRevenue, color: "#10b981" },
+  ], [medicalRevenue, otherRevenue]);
+
+  const monthlyRevenue = useMemo(() => {
+    const medPaid = (invoicesData || []).filter(isRevenueInvoice);
+    const now = new Date();
+    const months: { month: string; medical: number; other: number }[] = [];
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const label = d.toLocaleString("default", { month: "short" });
+      months.push({ month: label, medical: 0, other: 0 });
+    }
+    medPaid.forEach((inv) => {
+      const d = new Date(inv.created_at);
+      const idx = (d.getFullYear() - now.getFullYear()) * 12 + (d.getMonth() - now.getMonth()) + 11;
+      if (idx >= 0 && idx < 12) months[idx].medical += inv.total;
+    });
+    otherIncomeData.forEach((r) => {
+      const d = new Date(r.income_date);
+      const idx = (d.getFullYear() - now.getFullYear()) * 12 + (d.getMonth() - now.getMonth()) + 11;
+      if (idx >= 0 && idx < 12) months[idx].other += r.amount;
+    });
+    return months;
+  }, [invoicesData, otherIncomeData]);
+
+  const weeklyRevenue = useMemo(() => {
+    const medPaid = (invoicesData || []).filter(isRevenueInvoice);
+    const buckets: Record<string, { medical: number; other: number }> = {};
+    DAYS.forEach((d) => { buckets[d] = { medical: 0, other: 0 }; });
+    const now = new Date();
+    const weekAgo = new Date(now.getTime() - 7 * 86400000);
+    medPaid.filter((i) => new Date(i.created_at) >= weekAgo).forEach((inv) => {
+      const day = DAYS[new Date(inv.created_at).getDay()];
+      buckets[day].medical += inv.total;
+    });
+    otherIncomeData.filter((r) => new Date(r.income_date) >= weekAgo).forEach((r) => {
+      const day = DAYS[new Date(r.income_date).getDay()];
+      buckets[day].other += r.amount;
+    });
+    return DAYS.map((day) => ({ day, medical: buckets[day].medical, other: buckets[day].other }));
+  }, [invoicesData, otherIncomeData]);
+
+  const deptData = useMemo(() => {
+    if (!appointmentsData) return [];
+    const counts: Record<string, number> = {};
+    appointmentsData.forEach((a: any) => {
+      const dept = (a.doctor || a.staff)?.department || "General";
+      counts[dept] = (counts[dept] || 0) + 1;
+    });
+    return Object.entries(counts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([dept, count]) => ({ dept, count }));
+  }, [appointmentsData]);
+
+  const recentPatients = useMemo(() => {
+    if (!patientsData) return [];
+    return patientsData.slice(0, 5).map((p) => ({
+      name: p.user ? `${p.user.first_name} ${p.user.last_name}` : p.id,
+      id: p.patient_number,
+      lastVisit: p.created_at ? formatDate(p.created_at) : "N/A",
+    }));
+  }, [patientsData]);
+
+  const selectedMonthRevenue = useMemo(() => {
+    if (!selectedMonth) return 0;
+    const [y, m] = selectedMonth.split("-").map(Number);
+    const med = (invoicesData || [])
+      .filter((i) => {
+        if (!isRevenueInvoice(i)) return false;
+        const d = new Date(i.created_at);
+        return d.getFullYear() === y && d.getMonth() === m - 1;
+      })
+      .reduce((sum, i) => sum + i.total, 0);
+    const oth = otherIncomeData
+      .filter((r) => {
+        const d = new Date(r.income_date);
+        return d.getFullYear() === y && d.getMonth() === m - 1;
+      })
+      .reduce((sum, r) => sum + r.amount, 0);
+    return med + oth;
+  }, [selectedMonth, invoicesData, otherIncomeData]);
+
+  const profit = selectedMonthRevenue - expensesByMonth;
+  const profitMargin = selectedMonthRevenue > 0 ? (profit / selectedMonthRevenue) * 100 : 0;
+  const isProfitable = profit >= 0;
+
+  const kpis = [
+    {
+      label: "Total Revenue", value: loading ? "—" : formatCurrency(totalRevenue),
+      trend: `this ${period.toLowerCase()}`, up: revenueUp,
+      icon: DollarSign, gradient: "bg-gradient-to-br from-emerald-500 via-emerald-400 to-teal-300",
+    },
+    {
+      label: "New Patients", value: loading ? "—" : String(newPatients),
+      trend: `${staffCount} staff on board`, up: true,
+      icon: Users, gradient: "bg-gradient-to-br from-blue-500 via-indigo-400 to-violet-300",
+    },
+    {
+      label: "Appointments", value: loading ? "—" : String(appointmentsInPeriod),
+      trend: `${(appointmentsData?.length || 0) - appointmentsInPeriod} outside period`, up: appointmentsInPeriod > 0,
+      icon: Calendar, gradient: "bg-gradient-to-br from-amber-500 via-orange-400 to-rose-300",
+    },
+    {
+      label: "Total Expenses", value: loading ? "—" : formatCurrency(periodExpenses),
+      trend: `all-time total`, up: false,
+      icon: Receipt, gradient: "bg-gradient-to-br from-rose-500 via-pink-400 to-rose-300",
+    },
+    {
+      label: "Outstanding Receivables", value: loading ? "—" : formatCurrency(outstandingPayments),
+      trend: `${(invoicesData || []).filter((i) => (i.status === "pending" || i.status === "partially_paid")).length} unpaid invoices`, up: false,
+      icon: AlertTriangle, gradient: "bg-gradient-to-br from-red-500 via-rose-400 to-pink-300",
+    },
+  ];
+
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? "Good Morning" : hour < 17 ? "Good Afternoon" : "Good Evening";
+  const GreetingIcon = hour < 17 ? Sun : Moon;
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold text-white">Dashboard</h1>
+          <p className="text-sm text-white/50 mt-1">Welcome back. Here&apos;s your hospital overview.</p>
+        </div>
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="size-8 animate-spin text-[#e0a84a]" />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center gap-4">
+        <div className="relative">
+          <div className="absolute inset-0 rounded-full bg-gradient-to-br from-[#e0a84a]/40 to-[#e0a84a]/10 blur-md" />
+          <div className="relative size-14 rounded-full bg-gradient-to-br from-[#e0a84a] to-amber-500 flex items-center justify-center text-white text-lg font-bold ring-2 ring-[#e0a84a]/30 overflow-hidden">
+            {user?.avatar_url ? (
+              <img src={user.avatar_url} alt="" className="w-full h-full object-cover aspect-square" />
+            ) : (
+              user ? `${user.first_name[0]}${user.last_name[0]}` : "A"
+            )}
+          </div>
+        </div>
+        <div>
+          <div className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-[#e0a84a]/20 to-amber-500/20 px-3 py-1 mb-1">
+            <GreetingIcon className="size-3.5 text-[#e0a84a]" />
+            <span className="text-xs font-semibold text-[#e0a84a]">{greeting}</span>
+          </div>
+          <h1 className="text-2xl font-bold text-white">Welcome back, {user?.first_name || "Admin"} 👋</h1>
+          <p className="text-sm text-white/50 mt-0.5">Here&apos;s your hospital overview for today.</p>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3 flex-wrap">
+        <select value={period} onChange={(e) => setPeriod(e.target.value)}
+          className="h-9 rounded-xl border border-white/[0.08] bg-white/[0.04] px-3 text-xs text-white/80 focus:outline-none focus:border-[#e0a84a]/40">
+          {PERIODS.map((p) => (
+            <option key={p} value={p} className="bg-card">{p}</option>
+          ))}
+        </select>
+        <p className="text-xs text-white/40">
+          Cards below reflect the {period.toLowerCase()} period
+        </p>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        {kpis.map((kpi) => {
+          const Icon = kpi.icon;
+          return (
+            <GradientCard key={kpi.label} gradient={kpi.gradient}>
+              <div className="flex items-start justify-between relative z-10">
+                <div className="min-w-0 flex-1 mr-2">
+                  <p className="text-xs text-white/50">{kpi.label}</p>
+                  <p className="text-lg font-bold text-white mt-0.5 tabular-nums truncate">{kpi.value}</p>
+                  <div className="mt-1"><Trend up={kpi.up} value={kpi.trend} /></div>
+                </div>
+                <div className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.06] backdrop-blur-sm">
+                  <Icon className="size-4 text-white/80" />
+                </div>
+              </div>
+            </GradientCard>
+          );
+        })}
+      </div>
+
+      {/* Profitability Card */}
+      <GradientCard gradient={isProfitable
+        ? "bg-gradient-to-br from-emerald-500 via-emerald-400 to-teal-300"
+        : "bg-gradient-to-br from-red-500 via-rose-400 to-pink-300"}>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-10">
+          <div className="flex items-start gap-4">
+            <div className={cn(
+              "flex size-12 items-center justify-center rounded-xl border backdrop-blur-sm",
+              isProfitable ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" : "bg-red-500/10 border-red-500/20 text-red-400"
+            )}>
+              {isProfitable ? <TrendingUp className="size-6" /> : <TrendingDown className="size-6" />}
+            </div>
+            <div>
+              <div className="flex items-center gap-3">
+                <p className="text-sm text-white/50">Net Profit / Loss</p>
+                <input type="month" value={selectedMonth}
+                  onChange={(e) => setSelectedMonth(e.target.value)}
+                  className="h-7 text-xs rounded-lg bg-white/[0.06] border border-white/[0.08] text-white/70 px-2" />
+              </div>
+              <p className={cn(
+                "text-xl font-bold mt-1 tabular-nums",
+                isProfitable ? "text-emerald-400" : "text-red-400"
+              )}>
+                {loadingExpenses ? "—" : formatCurrency(profit)}
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-6 text-sm">
+            <div className="text-right">
+              <p className="text-xs text-white/40">Revenue</p>
+              <p className="font-semibold text-white">{formatCurrency(selectedMonthRevenue)}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-xs text-white/40">Expenses</p>
+              <p className="font-semibold text-red-400">{formatCurrency(expensesByMonth)}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-xs text-white/40">Margin</p>
+              <p className={cn("font-semibold", isProfitable ? "text-emerald-400" : "text-red-400")}>
+                {loadingExpenses ? "—" : `${profitMargin.toFixed(1)}%`}
+              </p>
+            </div>
+          </div>
+        </div>
+      </GradientCard>
+
+      <div className="grid gap-4 lg:grid-cols-3">
+        <Card className="lg:col-span-2 border-white/[0.06] bg-white/[0.03] backdrop-blur-xl">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base text-white">Weekly Revenue Breakdown</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="h-64">
+              {weeklyRevenue.every((d) => d.medical === 0 && d.other === 0) ? (
+                <div className="flex items-center justify-center h-full text-sm text-white/30">No revenue data this week</div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={weeklyRevenue} barGap={0} barCategoryGap="10%">
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" vertical={false} />
+                    <XAxis dataKey="day" tick={{ fontSize: 12, fill: "rgba(255,255,255,0.4)" }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 12, fill: "rgba(255,255,255,0.4)" }} axisLine={false} tickLine={false}
+                      tickFormatter={(v) => `₦${(v / 1000).toFixed(0)}k`} />
+                    <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(13, 19, 34, 0.95)", backdropFilter: "blur(12px)", boxShadow: "0 8px 32px rgba(0,0,0,0.3)" }}
+                      labelStyle={{ color: "rgba(255,255,255,0.5)" }} />
+                    <Bar dataKey="medical" name="Medical Services" fill="#e0a84a" radius={[4, 4, 0, 0]} stackId="a" />
+                    <Bar dataKey="other" name="Other Income" fill="#10b981" radius={[4, 4, 0, 0]} stackId="a" />
+                    <Legend wrapperStyle={{ fontSize: "12px", color: "rgba(255,255,255,0.6)" }} />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-white/[0.06] bg-white/[0.03] backdrop-blur-xl">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base text-white">Revenue Split</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="h-64">
+              {revenueBreakdown.every((r) => r.value === 0) ? (
+                <div className="flex items-center justify-center h-full text-sm text-white/30">No revenue data yet</div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <RePieChart>
+                    <Pie data={revenueBreakdown} cx="50%" cy="50%" innerRadius={55} outerRadius={85}
+                      paddingAngle={4} dataKey="value" stroke="none">
+                      {revenueBreakdown.map((entry, i) => (
+                        <Cell key={i} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(13, 19, 34, 0.95)", backdropFilter: "blur(12px)" }}
+                      formatter={(v) => [formatCurrency(Number(v)), ""]} />
+                    <Legend wrapperStyle={{ fontSize: "11px", color: "rgba(255,255,255,0.6)" }}
+                      formatter={(value) => <span style={{ color: "rgba(255,255,255,0.7)" }}>{value}</span>} />
+                  </RePieChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card className="border-white/[0.06] bg-white/[0.03] backdrop-blur-xl">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base text-white">Monthly Revenue Trend</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="h-64">
+              {monthlyRevenue.every((m) => m.medical === 0 && m.other === 0) ? (
+                <div className="flex items-center justify-center h-full text-sm text-white/30">No revenue data yet</div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={monthlyRevenue}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                    <XAxis dataKey="month" tick={{ fontSize: 12, fill: "rgba(255,255,255,0.4)" }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 12, fill: "rgba(255,255,255,0.4)" }} axisLine={false} tickLine={false}
+                      tickFormatter={(v) => `₦${(v / 1000).toFixed(0)}k`} />
+                    <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(13, 19, 34, 0.95)", backdropFilter: "blur(12px)", boxShadow: "0 8px 32px rgba(0,0,0,0.3)" }}
+                      labelStyle={{ color: "rgba(255,255,255,0.5)" }} />
+                    <Line type="monotone" dataKey="medical" name="Medical Services" stroke="#e0a84a" strokeWidth={2} dot={{ fill: "#e0a84a", r: 3 }} />
+                    <Line type="monotone" dataKey="other" name="Other Income" stroke="#10b981" strokeWidth={2} dot={{ fill: "#10b981", r: 3 }} />
+                    <Legend wrapperStyle={{ fontSize: "12px", color: "rgba(255,255,255,0.6)" }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-white/[0.06] bg-white/[0.03] backdrop-blur-xl">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base text-white">Appointments by Department</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="h-64">
+              {deptData.length === 0 ? (
+                <div className="flex items-center justify-center h-full text-sm text-white/30">No appointment data yet</div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={deptData} barCategoryGap="20%">
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" vertical={false} />
+                    <XAxis dataKey="dept" tick={{ fontSize: 11, fill: "rgba(255,255,255,0.4)" }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 12, fill: "rgba(255,255,255,0.4)" }} axisLine={false} tickLine={false} />
+                    <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(13, 19, 34, 0.95)", backdropFilter: "blur(12px)" }}
+                      labelStyle={{ color: "rgba(255,255,255,0.5)" }} />
+                    <Bar dataKey="count" fill="#e0a84a" radius={[6, 6, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-3">
+        <Card className="lg:col-span-2 border-white/[0.06] bg-white/[0.03] backdrop-blur-xl">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-base text-white">Recent Patients</CardTitle>
+            <Button variant="ghost" size="sm" className="text-[#e0a84a] hover:text-[#e0a84a]/80 hover:bg-white/[0.06] text-xs"
+              onClick={() => router.push("/admin/patients")}>View All</Button>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-white/[0.06] text-left text-xs text-white/40">
+                    <th className="px-5 py-3 font-medium">Name</th>
+                    <th className="px-5 py-3 font-medium">ID</th>
+                    <th className="px-5 py-3 font-medium">Registered</th>
+                    <th className="px-5 py-3 font-medium">Status</th>
+                    <th className="px-5 py-3 font-medium text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recentPatients.length === 0 ? (
+                    <tr><td colSpan={5} className="px-5 py-8 text-center text-sm text-white/40">No patients yet.</td></tr>
+                  ) : (
+                    recentPatients.map((p) => (
+                      <tr key={p.id} className="border-b border-white/[0.04] last:border-0 hover:bg-white/[0.02] transition-colors">
+                        <td className="px-5 py-3.5 font-medium text-white/80">{p.name}</td>
+                        <td className="px-5 py-3.5 text-white/50">{p.id}</td>
+                        <td className="px-5 py-3.5 text-white/50">{p.lastVisit}</td>
+                        <td className="px-5 py-3.5">
+                          <Badge className="text-[11px] bg-emerald-500/10 text-emerald-400 border-emerald-500/20">Active</Badge>
+                        </td>
+                        <td className="px-5 py-3.5 text-right">
+                          <Button variant="ghost" size="sm" className="h-8 text-xs text-[#e0a84a] hover:text-[#e0a84a]/80 hover:bg-white/[0.06]"
+                            onClick={() => router.push(`/admin/patients?view=${p.id}`)}>View</Button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-white/[0.06] bg-white/[0.03] backdrop-blur-xl">
+          <CardHeader><CardTitle className="text-base text-white">Quick Actions</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <Button className="w-full justify-start gap-3 h-11 bg-white/[0.04] hover:bg-white/[0.08] border-white/[0.06] text-white/80 hover:text-white transition-all"
+              onClick={() => router.push("/admin/patients")}>
+              <div className="flex size-7 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400"><Plus className="size-4" /></div>
+              Add Patient
+            </Button>
+            <Button className="w-full justify-start gap-3 h-11 bg-white/[0.04] hover:bg-white/[0.08] border-white/[0.06] text-white/80 hover:text-white transition-all"
+              onClick={() => router.push("/admin/appointments")}>
+              <div className="flex size-7 items-center justify-center rounded-lg bg-blue-500/10 text-blue-400"><Calendar className="size-4" /></div>
+              Schedule Appointment
+            </Button>
+            <Button className="w-full justify-start gap-3 h-11 bg-white/[0.04] hover:bg-white/[0.08] border-white/[0.06] text-white/80 hover:text-white transition-all"
+              onClick={() => router.push("/admin/reports")}>
+              <div className="flex size-7 items-center justify-center rounded-lg bg-amber-500/10 text-amber-400"><FileText className="size-4" /></div>
+              Generate Report
+            </Button>
+            <Button className="w-full justify-start gap-3 h-11 bg-white/[0.04] hover:bg-white/[0.08] border-white/[0.06] text-white/80 hover:text-white transition-all"
+              onClick={() => router.push("/admin/reports")}>
+              <div className="flex size-7 items-center justify-center rounded-lg bg-rose-500/10 text-rose-400"><ArrowUpRight className="size-4" /></div>
+              View Analytics
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}

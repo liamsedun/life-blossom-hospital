@@ -1,0 +1,321 @@
+"use client";
+
+import { useEffect, useState, useRef } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import {
+  Home, Calendar, CreditCard, User, Bell, ChevronRight,
+  MessageCircle, MessagesSquare, X,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/auth-context";
+import { useInboxRealtime } from "@/lib/chat";
+import type { Notification } from "@/lib/api-types";
+import IdleLogout from "@/components/ui/IdleLogout";
+import ThemeToggle from "@/components/ui/theme-toggle";
+import { usePushNotifications } from "@/contexts/notification-context";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+
+const tabs = [
+  { href: "/patient", label: "Home", icon: Home },
+  { href: "/patient/appointments", label: "Appointments", icon: Calendar },
+  { href: "/patient/chats", label: "Chat", icon: MessagesSquare },
+  { href: "/patient/payments", label: "Payments", icon: CreditCard },
+  { href: "/patient/profile", label: "Profile", icon: User },
+];
+
+const typeIcons: Record<string, string> = {
+  appointment_reminder: "📅",
+  payment_due: "💳",
+  lab_result: "🔬",
+  prescription_refill: "💊",
+  chat_message: "💬",
+  general: "✉️",
+};
+
+export default function PatientLayout({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  const { user } = useAuth();
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [chatUnread, setChatUnread] = useState(0);
+  const [chatToast, setChatToast] = useState<string | null>(null);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const bellRef = useRef<HTMLButtonElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const { supported, isSubscribed, subscribe, unsubscribe } = usePushNotifications();
+
+  // Register the service worker for push notifications (production only — SW breaks dev HMR on other devices)
+  useEffect(() => {
+    if ("serviceWorker" in navigator && window.location.protocol === "https:") {
+      navigator.serviceWorker.register("/sw.js").catch(() => {});
+    }
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    const fetchNotifs = () => {
+      fetch("/api/notifications?page_size=20&unread_only=true")
+        .then((r) => r.json())
+        .then((json) => {
+          if (!json.success || !mounted) return;
+          const all = json.data || [];
+          setNotifications(all.slice(0, 10));
+          setUnreadCount(all.filter((n: Notification) => !n.is_read).length);
+        })
+        .catch(() => {});
+    };
+    fetchNotifs();
+    const id = setInterval(fetchNotifs, 60_000);
+    return () => {
+      mounted = false;
+      clearInterval(id);
+    };
+  }, []);
+
+  // Chat unread badge — poll + realtime push
+  const [chatData, setChatData] = useState<{ chats: { id: string; other_user: { first_name: string; last_name: string } | null }[] } | null>(null);
+  useEffect(() => {
+    let mounted = true;
+    const poll = () => {
+      fetch("/api/chats")
+        .then((r) => r.json())
+        .then((json) => {
+          if (json.success && mounted) {
+            const total = (json.data.chats ?? []).reduce((acc: number, c: any) => acc + (c.unread_count ?? 0), 0);
+            setChatUnread(total);
+            setChatData(json.data);
+          }
+        })
+        .catch(() => {});
+    };
+    poll();
+    const id = setInterval(poll, 30_000);
+    return () => {
+      mounted = false;
+      clearInterval(id);
+    };
+  }, []);
+
+  useInboxRealtime(!!user, (ev) => {
+    if (!user) return;
+    if (ev.sender_id === user.id) return;
+    setChatUnread((n) => n + 1);
+    const chat = chatData?.chats.find((c) => c.id === ev.chat_id);
+    const name = chat?.other_user ? `${chat.other_user.first_name} ${chat.other_user.last_name}`.trim() : "your care team";
+    setChatToast(`New message from ${name}`);
+    window.setTimeout(() => setChatToast(null), 4000);
+  });
+
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(e.target as Node) &&
+        bellRef.current &&
+        !bellRef.current.contains(e.target as Node)
+      ) {
+        setShowDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  const markAllRead = async () => {
+    const res = await fetch("/api/notifications", { method: "PUT" });
+    if (res.ok) {
+      setNotifications([]);
+      setUnreadCount(0);
+    }
+  };
+
+  const dismissNotification = (n: Notification) => {
+    fetch(`/api/notifications/${n.id}`, { method: "DELETE" }).catch(() => {});
+    setNotifications((prev) => prev.filter((x) => x.id !== n.id));
+    setUnreadCount((c) => Math.max(0, c - 1));
+    if (n.link) window.location.href = n.link;
+  };
+
+  const notificationTime = (sentAt: string) => {
+    const ts = sentAt ? new Date(sentAt).getTime() : Date.now();
+    const diff = Date.now() - ts;
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return "Just now";
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    return new Date(sentAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+  };
+
+  return (
+    <div className="relative min-h-screen-safe bg-background dark:bg-[#0a0f1a] flex flex-col">
+      {/* Full-screen background gradient — extends behind status bar */}
+      <div className="fixed inset-0 bg-gradient-to-br from-background via-background to-background dark:from-[#0a0f1a] dark:via-[#0d1322] dark:to-[#0f1a2e] -z-10" />
+      <IdleLogout />
+      <div className="fixed inset-0 bg-[url('/grid.svg')] opacity-[0.03] dark:opacity-[0.03] pointer-events-none -z-10" />
+
+      {/* Header — extends behind the status bar */}
+      <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-border">
+        <div className="pt-safe" />
+        <div className="flex items-center justify-between px-4 py-3 max-w-lg mx-auto w-full">
+          <Link href="/patient/profile" className="flex items-center gap-2.5">
+            <div className="relative shrink-0">
+              <div className="absolute inset-0 rounded-full bg-gradient-to-br from-[#e0a84a]/40 to-[#e0a84a]/10 blur-sm" />
+              <Avatar size="sm" className="relative ring-2 ring-[#e0a84a]/30">
+                <AvatarImage src={user?.avatar_url || ""} alt={user?.first_name || "Patient"} />
+                <AvatarFallback className="text-xs bg-[#e0a84a]/15 text-[#e0a84a] font-semibold">
+                  {user ? `${user.first_name[0]}${user.last_name[0]}` : "P"}
+                </AvatarFallback>
+              </Avatar>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Hello,</p>
+              <h1 className="text-lg font-semibold text-foreground flex items-center gap-1">
+                {user?.first_name || "Patient"}! <ChevronRight className="w-4 h-4 text-muted-foreground" />
+              </h1>
+            </div>
+          </Link>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/patient/chats"
+              className="p-2 rounded-full hover:bg-muted transition-all group relative"
+              title="Internal Chat"
+            >
+              <MessageCircle className="w-5 h-5 text-blue-400 group-hover:scale-110 transition-transform" />
+              {chatUnread > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[16px] h-4 flex items-center justify-center bg-red-500 text-white text-[9px] font-bold rounded-full px-1 leading-none">
+                  {chatUnread > 9 ? "9+" : chatUnread}
+                </span>
+              )}
+            </Link>
+            <ThemeToggle />
+            <div className="relative">
+              <button
+                ref={bellRef}
+                onClick={() => setShowDropdown(!showDropdown)}
+                className="relative p-2 rounded-full hover:bg-muted transition-all"
+              >
+                <Bell className="w-5 h-5 text-muted-foreground" />
+                {unreadCount > 0 && (
+                  <span className="absolute top-1 right-1 min-w-[18px] h-[18px] flex items-center justify-center bg-gradient-to-br from-[#e0a84a] to-amber-500 text-[#0a0f1a] text-[10px] font-bold rounded-full px-1 leading-none shadow-lg shadow-[#e0a84a]/20">
+                    {unreadCount > 9 ? "9+" : unreadCount}
+                  </span>
+                )}
+              </button>
+
+              {showDropdown && (
+                <div
+                  ref={dropdownRef}
+                  className="absolute right-0 top-full mt-2 w-80 bg-background/95 backdrop-blur-xl border border-border rounded-2xl shadow-2xl z-50 overflow-hidden"
+                >
+                  <div className="flex items-center justify-between px-4 py-2.5 border-b border-border">
+                    <span className="text-[11px] font-medium text-muted-foreground">Push notifications</span>
+                    {supported ? (
+                      <button
+                        onClick={() => isSubscribed ? unsubscribe() : subscribe()}
+                        className={cn(
+                          "relative inline-flex h-5 w-9 items-center rounded-full transition-colors",
+                          isSubscribed ? "bg-[#e0a84a]" : "bg-muted"
+                        )}
+                      >
+                        <span className={cn(
+                          "inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform",
+                          isSubscribed ? "translate-x-4.5" : "translate-x-0.5"
+                        )} />
+                      </button>
+                    ) : (
+                      <span className="text-[10px] text-muted-foreground">N/A</span>
+                    )}
+                  </div>
+                  <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+                    <h3 className="text-sm font-semibold text-foreground">Notifications</h3>
+                    {unreadCount > 0 && (
+                      <button
+                        onClick={markAllRead}
+                        className="text-xs text-[#e0a84a] hover:underline"
+                      >
+                        Mark all read
+                      </button>
+                    )}
+                  </div>
+                  <div className="max-h-80 overflow-y-auto">
+                    {notifications.length === 0 ? (
+                      <div className="px-4 py-8 text-center text-sm text-muted-foreground">
+                        No notifications yet
+                      </div>
+                    ) : (
+                      notifications.map((n) => (
+                        <div
+                          key={n.id}
+                          onClick={() => dismissNotification(n)}
+                          className={cn(
+                            "flex items-start gap-3 px-4 py-3 border-b border-border last:border-0 hover:bg-muted/50 transition-colors cursor-pointer"
+                          )}
+                        >
+                          <span className="text-lg leading-none mt-0.5 shrink-0">
+                            {typeIcons[n.type] || "📋"}
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-foreground/80 leading-tight">{n.title}</p>
+                            {n.body && (
+                              <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{n.body}</p>
+                            )}
+                            <p className="text-[10px] text-muted-foreground/60 mt-1">{notificationTime(n.created_at)}</p>
+                          </div>
+                          <span className="w-2 h-2 rounded-full bg-[#e0a84a] shrink-0 mt-1.5" />
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main className="flex-1 max-w-lg mx-auto w-full px-4 pb-20 pt-4">
+        {chatToast && (
+          <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-card border border-[#e0a84a]/30 text-foreground text-sm px-4 py-2.5 rounded-xl shadow-2xl flex items-center gap-2 animate-pulse">
+            <span className="w-2 h-2 rounded-full bg-emerald-400" />
+            {chatToast}
+          </div>
+        )}
+        {children}
+      </main>
+
+      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-background/90 backdrop-blur-xl border-t border-border">
+        <div className="pb-safe" />
+        <div className="max-w-lg mx-auto flex items-center justify-around h-16 px-2">
+          {tabs.map(({ href, label, icon: Icon }) => {
+            const isActive = pathname === href || (href !== "/patient" && pathname.startsWith(href));
+            return (
+              <Link
+                key={href}
+                href={href}
+                className={cn(
+                  "flex flex-col items-center justify-center gap-0.5 px-3 py-1.5 rounded-xl transition-all duration-200 relative",
+                  isActive ? "text-[#e0a84a]" : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {isActive && (
+                  <span className="absolute inset-0 rounded-xl bg-[#e0a84a]/10 border border-[#e0a84a]/20" />
+                )}
+                <span className="relative z-10">
+                  <Icon className={cn("w-5 h-5", isActive && "drop-shadow-[0_0_6px_rgba(224,168,74,0.3)]")} />
+                  {href === "/patient/chats" && chatUnread > 0 && (
+                    <span className="absolute -top-1.5 -right-2.5 min-w-[16px] h-4 flex items-center justify-center bg-red-500 text-white text-[9px] font-bold rounded-full px-1 leading-none">
+                      {chatUnread > 9 ? "9+" : chatUnread}
+                    </span>
+                  )}
+                </span>
+                <span className="text-[10px] font-medium leading-tight relative z-10">{label}</span>
+              </Link>
+            );
+          })}
+        </div>
+      </nav>
+    </div>
+  );
+}

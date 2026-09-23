@@ -1,0 +1,642 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
+import {
+  ArrowLeft, CreditCard, Landmark, Smartphone, CheckCircle2,
+  Loader2, Copy, AlertTriangle, Building2, Phone, MapPin, ShieldCheck,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/auth-context";
+import { emitDashboardRefresh } from "@/lib/dashboard-events";
+import type { Invoice } from "@/lib/api-types";
+
+interface BankAccount {
+  id: string;
+  bank_name: string;
+  account_name: string;
+  account_number: string;
+  is_active: boolean;
+}
+
+interface OrgInfo {
+  name: string;
+  address: string;
+  phone: string;
+  email: string;
+}
+
+function Modal({ open, onClose, children }: {
+  open: boolean;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 pb-20" onClick={onClose}>
+      <div
+        className="w-full max-w-md max-h-[85vh] overflow-y-auto bg-card border border-border rounded-3xl shadow-2xl p-5"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function CopyRow({ label, value }: { label: string; value: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        navigator.clipboard?.writeText(value).catch(() => {});
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      }}
+      className="w-full flex items-center justify-between gap-2 rounded-xl bg-muted border border-border px-3 py-2.5 hover:border-[#e0a84a]/40 transition-all"
+    >
+      <span className="text-left">
+        <span className="block text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">{label}</span>
+        <span className="block text-sm font-bold text-foreground mt-0.5">{value}</span>
+      </span>
+      {copied ? (
+        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+      ) : (
+        <Copy className="w-4 h-4 text-muted-foreground shrink-0" />
+      )}
+    </button>
+  );
+}
+
+export default function PayInvoicePage() {
+  const params = useParams<{ id: string }>();
+  const router = useRouter();
+  const invoiceId = params.id;
+
+  const { user } = useAuth();
+  const isDependant = user?.role === "patient" && Boolean(user.patient?.is_dependant);
+
+  const [invoice, setInvoice] = useState<Invoice | null>(null);
+  const [org, setOrg] = useState<OrgInfo>({ name: "Life Blossom Hospital", address: "", phone: "", email: "" });
+  const [accounts, setAccounts] = useState<BankAccount[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
+
+  const [showBank, setShowBank] = useState(false);
+  const [showPos, setShowPos] = useState(false);
+  const [declaring, setDeclaring] = useState(false);
+  const [declared, setDeclared] = useState<{ ref: string } | null>(null);
+  const [transferAmount, setTransferAmount] = useState("");
+  const [selectedBankAccountId, setSelectedBankAccountId] = useState("");
+  const [posDeclaring, setPosDeclaring] = useState(false);
+  const [posDeclared, setPosDeclared] = useState<{ ref: string } | null>(null);
+  const [posAmount, setPosAmount] = useState("");
+  const [posSelectedBankAccountId, setPosSelectedBankAccountId] = useState("");
+  const [posError, setPosError] = useState("");
+  const [paystackBusy, setPaystackBusy] = useState(false);
+  const [paystackNotice, setPaystackNotice] = useState("");
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    Promise.all([
+      fetch("/api/invoices?page_size=100").then((r) => r.json()),
+      fetch("/api/org").then((r) => r.json()),
+      fetch("/api/settings/bank-accounts").then((r) => r.json()),
+    ])
+      .then(([invJson, orgJson, bankJson]) => {
+        const found = (invJson.data || []).find((i: Invoice) => i.id === invoiceId);
+        if (!found) setNotFound(true);
+        else setInvoice(found);
+        if (orgJson.success) {
+          setOrg({
+            name: orgJson.data.name || "Life Blossom Hospital",
+            address: orgJson.data.address || "",
+            phone: orgJson.data.phone || "",
+            email: orgJson.data.email || "",
+          });
+        }
+        if (bankJson.success) setAccounts(bankJson.data.accounts || []);
+      })
+      .catch(() => setNotFound(true))
+      .finally(() => setLoading(false));
+  }, [invoiceId]);
+
+  if (notFound) {
+    return (
+      <div className="flex flex-col items-center justify-center pt-20 space-y-3 px-6 text-center">
+        <AlertTriangle className="w-10 h-10 text-amber-400" />
+        <h2 className="text-lg font-bold text-foreground">Invoice not found</h2>
+        <p className="text-sm text-muted-foreground">This invoice may have been settled or removed.</p>
+        <Link href="/patient/payments" className="mt-2 h-10 px-5 bg-gradient-to-r from-[#e0a84a] to-amber-500 text-[#0a0f1a] text-sm font-semibold rounded-xl inline-flex items-center gap-2">
+          <ArrowLeft className="w-4 h-4" /> Back to Payments
+        </Link>
+      </div>
+    );
+  }
+
+  if (loading || !invoice) {
+    return (
+      <div className="space-y-4">
+        <div className="h-5 w-40 bg-muted rounded animate-pulse" />
+        <div className="rounded-2xl border border-border bg-card p-5 space-y-3 animate-pulse">
+          <div className="h-4 w-2/3 bg-muted rounded" />
+          <div className="h-8 w-1/2 bg-muted rounded" />
+        </div>
+      </div>
+    );
+  }
+
+  const outstanding = invoice.total - invoice.paid_amount;
+  const alreadyPaid = invoice.status === "paid" || outstanding <= 0;
+
+  const handlePaystack = async () => {
+    setPaystackBusy(true);
+    setPaystackNotice("");
+    setError("");
+    try {
+      const res = await fetch("/api/payments/initialize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          invoice_id: invoiceId,
+          patient_id: invoice.patient_id,
+          email: "patient@lifeblossom.com",
+          amount: outstanding,
+        }),
+      });
+      const json = await res.json();
+      if (!json.success) {
+        setPaystackNotice(json.error || "Paystack is unavailable right now");
+        return;
+      }
+      if (json.data.placeholder) {
+        setPaystackNotice(json.data.message || "Online card payment is coming soon.");
+        return;
+      }
+      window.location.href = json.data.authorization_url;
+    } catch {
+      setPaystackNotice("Could not reach the payment gateway. Please try Bank Transfer or POS.");
+    } finally {
+      setPaystackBusy(false);
+    }
+  };
+
+  const handleDeclare = async () => {
+    const amt = Number(transferAmount);
+    if (!amt || amt <= 0) { setError("Enter the amount you transferred"); return; }
+    if (amt > outstanding) {
+      setError(`Amount exceeds the outstanding balance of ₦${outstanding.toLocaleString()}`);
+      return;
+    }
+    if (!selectedBankAccountId) {
+      setError("Please select which hospital bank account you transferred to");
+      return;
+    }
+    setDeclaring(true);
+    setError("");
+    try {
+      const res = await fetch("/api/payments/declare", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ invoice_id: invoiceId, amount: amt, bank_account_id: selectedBankAccountId }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setDeclared({ ref: json.data.transaction_ref || "" });
+        emitDashboardRefresh("payments");
+      } else {
+        setError(json.error || "Failed to declare the transfer");
+      }
+    } catch {
+      setError("Network error");
+    } finally {
+      setDeclaring(false);
+    }
+  };
+
+  const handlePosDeclare = async () => {
+    const amt = Number(posAmount);
+    if (!amt || amt <= 0) { setPosError("Enter the amount you paid"); return; }
+    if (amt > outstanding) {
+      setPosError(`Amount exceeds the outstanding balance of ₦${outstanding.toLocaleString()}`);
+      return;
+    }
+    if (!posSelectedBankAccountId) {
+      setPosError("Please select which hospital bank account the POS payment was made to");
+      return;
+    }
+    setPosDeclaring(true);
+    setPosError("");
+    try {
+      const res = await fetch("/api/payments/declare", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ invoice_id: invoiceId, amount: amt, payment_method: "pos", bank_account_id: posSelectedBankAccountId }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setPosDeclared({ ref: json.data.transaction_ref || "" });
+        emitDashboardRefresh("payments");
+      } else {
+        setPosError(json.error || "Failed to declare the payment");
+      }
+    } catch {
+      setPosError("Network error");
+    } finally {
+      setPosDeclaring(false);
+    }
+  };
+
+  const openBank = () => {
+    setError("");
+    setDeclared(null);
+    setTransferAmount(String(outstanding));
+    setSelectedBankAccountId("");
+    setShowBank(true);
+  };
+
+  const openPos = () => {
+    setPosError("");
+    setPosDeclared(null);
+    setPosAmount(String(outstanding));
+    setPosSelectedBankAccountId("");
+    setShowPos(true);
+  };
+
+  const methods = [
+    {
+      key: "paystack",
+      title: "Paystack",
+      desc: "Pay securely online with your card (Visa, Mastercard, Verve).",
+      icon: CreditCard,
+      accent: "from-sky-500 to-blue-600",
+      action: handlePaystack,
+    },
+    {
+      key: "bank",
+      title: "Bank Transfer",
+      desc: "Transfer to the hospital's bank account and declare it here.",
+      icon: Landmark,
+      accent: "from-emerald-500 to-teal-600",
+      action: openBank,
+    },
+    {
+      key: "pos",
+      title: "POS",
+      desc: "Pay with your card at the hospital counter via POS terminal.",
+      icon: Smartphone,
+      accent: "from-violet-500 to-purple-600",
+      action: openPos,
+    },
+  ];
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center gap-3">
+        <Link href="/patient/payments" className="p-1 -ml-1">
+          <ArrowLeft className="w-5 h-5 text-muted-foreground hover:text-foreground transition-colors" />
+        </Link>
+        <div className="flex-1">
+          <h2 className="text-xl font-bold text-foreground">Pay Invoice</h2>
+          <p className="text-xs text-muted-foreground">Choose how you'd like to pay</p>
+        </div>
+      </div>
+
+      {alreadyPaid ? (
+        <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] p-6 text-center">
+          <CheckCircle2 className="w-10 h-10 text-emerald-400 mx-auto mb-3" />
+          <h3 className="text-base font-bold text-foreground">This invoice is fully settled</h3>
+          <p className="text-sm text-muted-foreground mt-1">
+            {invoice.invoice_number} · ₦{invoice.total.toLocaleString()} paid
+          </p>
+          <Link
+            href="/patient/payments"
+            className="mt-4 inline-flex h-10 px-5 items-center justify-center bg-gradient-to-r from-[#e0a84a] to-amber-500 text-[#0a0f1a] text-sm font-semibold rounded-xl"
+          >
+            Back to Payments
+          </Link>
+        </div>
+      ) : (
+        <>
+          <div className="relative rounded-2xl border border-border bg-gradient-to-br from-[#0b2a4a] via-[#0e3a63] to-[#0d5f7a] p-5 overflow-hidden">
+            <div className="absolute top-0 right-0 w-40 h-40 translate-x-1/2 -translate-y-1/2 rounded-full bg-[#e0a84a]/[0.08]" />
+            <p className="text-xs text-muted-foreground">{invoice.invoice_number}</p>
+            <p className="text-[11px] text-muted-foreground mt-0.5">
+              {invoice.items?.[0]?.description || "Medical Service"}
+              {invoice.items && invoice.items.length > 1 && ` +${invoice.items.length - 1} more`}
+            </p>
+            <p className="text-2xl font-bold text-foreground mt-2">
+              ₦{outstanding.toLocaleString()}
+              <span className="text-xs font-medium text-muted-foreground ml-2">outstanding</span>
+            </p>
+            <p className="text-[11px] text-muted-foreground mt-1">
+              Paid so far: ₦{invoice.paid_amount.toLocaleString()} · Total: ₦{invoice.total.toLocaleString()}
+            </p>
+          </div>
+
+          {isDependant ? (
+            <div className="rounded-2xl border border-[#e0a84a]/20 bg-[#e0a84a]/[0.06] p-6 text-center">
+              <ShieldCheck className="w-10 h-10 text-[#e0a84a] mx-auto mb-3" />
+              <h3 className="text-base font-bold text-foreground">Paid by your main account holder</h3>
+              <p className="text-sm text-muted-foreground mt-1">
+                Dependants cannot make payments directly. Your main account holder
+                (or hospital staff) will settle this bill on your behalf.
+              </p>
+              <Link
+                href="/patient/payments"
+                className="mt-4 inline-flex h-10 px-5 items-center justify-center bg-gradient-to-r from-[#e0a84a] to-amber-500 text-[#0a0f1a] text-sm font-semibold rounded-xl"
+              >
+                Back to Payments
+              </Link>
+            </div>
+          ) : (
+            <>
+              <div className="grid gap-3">
+                {methods.map((m) => (
+                  <button
+                    key={m.key}
+                    onClick={m.action}
+                    className="group flex items-center gap-4 rounded-2xl border border-border bg-card backdrop-blur-xl p-4 text-left hover:border-[#e0a84a]/40 hover:-translate-y-0.5 transition-all"
+                  >
+                    <div className={cn("w-12 h-12 rounded-2xl bg-gradient-to-br flex items-center justify-center text-white shadow-lg shrink-0", m.accent)}>
+                      <m.icon className="w-6 h-6" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-foreground">{m.title}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{m.desc}</p>
+                    </div>
+                    <span className="text-[#e0a84a] font-semibold text-sm group-hover:translate-x-1 transition-transform">→</span>
+                  </button>
+                ))}
+              </div>
+
+              <p className="text-[11px] text-muted-foreground/60 text-center flex items-center justify-center gap-1.5">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400/70" />
+                Payments are confirmed by hospital staff and your account is settled automatically.
+              </p>
+            </>
+          )}
+        </>
+      )}
+
+      {/* ── Bank Transfer popup ── */}
+      <Modal open={showBank} onClose={() => setShowBank(false)}>
+        <div className="flex items-center justify-between mb-1">
+          <div>
+            <h3 className="text-lg font-bold text-foreground">Bank Transfer</h3>
+            <p className="text-xs text-muted-foreground">Transfer and declare your payment</p>
+          </div>
+          <button onClick={() => setShowBank(false)} className="p-2 rounded-xl hover:bg-muted text-muted-foreground">
+            <ArrowLeft className="w-4 h-4 rotate-180" />
+          </button>
+        </div>
+
+        {declared ? (
+          <div className="mt-4 text-center py-6">
+            <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center mx-auto mb-3">
+              <CheckCircle2 className="w-7 h-7 text-emerald-400" />
+            </div>
+            <h4 className="text-base font-bold text-foreground">Transfer declared</h4>
+            <p className="text-xs text-muted-foreground mt-1 max-w-[280px] mx-auto">
+              Reference <span className="text-[#e0a84a] font-mono font-semibold">{declared.ref}</span> — our
+              accountants have been notified and will confirm your payment shortly.
+            </p>
+            <button
+              onClick={() => { setShowBank(false); setDeclared(null); }}
+              className="mt-5 w-full h-11 bg-gradient-to-r from-[#e0a84a] to-amber-500 text-[#0a0f1a] text-sm font-semibold rounded-xl"
+            >
+              Done
+            </button>
+          </div>
+        ) : (
+          <>
+            <div className="rounded-xl bg-[#e0a84a]/[0.06] border border-[#e0a84a]/20 px-3 py-2.5 text-xs text-[#e0a84a] mb-4">
+              Outstanding balance: <span className="font-bold">₦{outstanding.toLocaleString()}</span> for {invoice.invoice_number}
+            </div>
+
+            <label className="block text-xs font-medium text-muted-foreground mb-1.5">
+              Amount transferred (₦)
+            </label>
+            <input
+              type="number"
+              min="0"
+              max={outstanding}
+              step="0.01"
+              value={transferAmount}
+              onChange={(e) => {
+                setTransferAmount(e.target.value);
+                setError("");
+              }}
+              placeholder="Enter the exact amount you sent"
+              className="w-full h-11 rounded-xl border border-border bg-muted px-3 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-[#e0a84a]/40"
+            />
+            <p className="text-[10px] text-muted-foreground/60 mt-1 mb-4">
+              Enter exactly what you transferred — partial payments are fine.
+            </p>
+
+            {accounts.length === 0 ? (
+              <div className="rounded-xl bg-amber-500/[0.06] border border-amber-500/20 p-4 text-center">
+                <AlertTriangle className="w-6 h-6 text-amber-400 mx-auto mb-2" />
+                <p className="text-xs text-foreground/60">
+                  No hospital bank accounts have been set up yet — please use the POS counter or Paystack.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Which account did you transfer to?</p>
+                {accounts.map((acc) => (
+                  <button
+                    key={acc.id}
+                    type="button"
+                    onClick={() => setSelectedBankAccountId(acc.id)}
+                    className={cn(
+                      "w-full text-left space-y-2 rounded-2xl border p-3 transition-all",
+                      selectedBankAccountId === acc.id
+                        ? "border-[#e0a84a] bg-[#e0a84a]/[0.06] ring-1 ring-[#e0a84a]/30"
+                        : "border-border bg-card hover:border-[#e0a84a]/30"
+                    )}
+                  >
+                    <p className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                      <Landmark className="w-3.5 h-3.5 text-[#e0a84a]" /> {acc.bank_name}
+                      {selectedBankAccountId === acc.id && (
+                        <span className="ml-auto text-[#e0a84a] text-[10px] font-semibold">✓ Selected</span>
+                      )}
+                    </p>
+                    <CopyRow label="Account Name" value={acc.account_name} />
+                    <CopyRow label="Account Number" value={acc.account_number} />
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {error && (
+              <div className="mt-3 rounded-xl bg-rose-500/10 border border-rose-500/20 p-3 text-sm text-rose-400">{error}</div>
+            )}
+
+            {accounts.length > 0 && (
+              <button
+                onClick={handleDeclare}
+                disabled={declaring}
+                className="mt-4 w-full h-11 bg-gradient-to-r from-[#e0a84a] to-amber-500 text-[#0a0f1a] text-sm font-semibold rounded-xl shadow-lg shadow-[#e0a84a]/20 disabled:opacity-50 inline-flex items-center justify-center gap-2"
+              >
+                {declaring ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                {declaring ? "Declaring..." : "I've completed the transfer"}
+              </button>
+            )}
+          </>
+        )}
+      </Modal>
+
+      {/* ── POS popup ── */}
+      <Modal open={showPos} onClose={() => setShowPos(false)}>
+        <div className="flex items-center justify-between mb-1">
+          <div>
+            <h3 className="text-lg font-bold text-foreground">Pay with POS</h3>
+            <p className="text-xs text-muted-foreground">At the hospital counter</p>
+          </div>
+          <button onClick={() => setShowPos(false)} className="p-2 rounded-xl hover:bg-muted text-muted-foreground">
+            <ArrowLeft className="w-4 h-4 rotate-180" />
+          </button>
+        </div>
+
+        {posDeclared ? (
+          <div className="mt-4 text-center py-6">
+            <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center mx-auto mb-3">
+              <CheckCircle2 className="w-7 h-7 text-emerald-400" />
+            </div>
+            <h4 className="text-base font-bold text-foreground">Payment declared</h4>
+            <p className="text-xs text-muted-foreground mt-1 max-w-[280px] mx-auto">
+              Reference <span className="text-[#e0a84a] font-mono font-semibold">{posDeclared.ref}</span> — our
+              staff will confirm your POS payment shortly.
+            </p>
+            <button
+              onClick={() => { setShowPos(false); setPosDeclared(null); }}
+              className="mt-5 w-full h-11 bg-gradient-to-r from-[#e0a84a] to-amber-500 text-[#0a0f1a] text-sm font-semibold rounded-xl"
+            >
+              Done
+            </button>
+          </div>
+        ) : (
+          <>
+            <div className="mt-4 rounded-2xl border border-border bg-card p-4 space-y-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center shrink-0">
+                  <Building2 className="w-5 h-5 text-violet-400" />
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-foreground">{org.name}</p>
+                  <p className="text-xs text-muted-foreground">{invoice.invoice_number} · ₦{outstanding.toLocaleString()} outstanding</p>
+                </div>
+              </div>
+              <p className="text-xs text-foreground/60 leading-relaxed">
+                Visit the hospital reception or billing desk and pay with your card via our POS terminal.
+                Enter the amount you paid below so our staff can confirm your payment.
+              </p>
+              {org.address && (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <MapPin className="w-3.5 h-3.5 text-[#e0a84a]" /> {org.address}
+                </div>
+              )}
+              {org.phone && (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Phone className="w-3.5 h-3.5 text-[#e0a84a]" /> {org.phone}
+                </div>
+              )}
+            </div>
+
+            <label className="block text-xs font-medium text-muted-foreground mt-4 mb-1.5">
+              Amount paid (₦)
+            </label>
+            <input
+              type="number"
+              min="0"
+              max={outstanding}
+              step="0.01"
+              value={posAmount}
+              onChange={(e) => {
+                setPosAmount(e.target.value);
+                setPosError("");
+              }}
+              placeholder="Enter the exact amount you paid"
+              className="w-full h-11 rounded-xl border border-border bg-muted px-3 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-[#e0a84a]/40"
+            />
+            <p className="text-[10px] text-muted-foreground/60 mt-1">
+              Enter exactly what you paid — partial payments are fine.
+            </p>
+
+            {accounts.length > 0 && (
+              <>
+                <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mt-4 mb-1.5">
+                  Which terminal did you pay into?
+                </label>
+                <div className="space-y-2">
+                  {accounts.map((acc) => (
+                    <button
+                      key={acc.id}
+                      type="button"
+                      onClick={() => setPosSelectedBankAccountId(acc.id)}
+                      className={cn(
+                        "w-full text-left rounded-xl border p-2.5 transition-all flex items-center gap-2",
+                        posSelectedBankAccountId === acc.id
+                          ? "border-[#e0a84a] bg-[#e0a84a]/[0.06] ring-1 ring-[#e0a84a]/30"
+                          : "border-border bg-card hover:border-[#e0a84a]/30"
+                      )}
+                    >
+                      <Landmark className="w-3.5 h-3.5 text-[#e0a84a] shrink-0" />
+                      <span className="text-xs font-medium text-foreground">{acc.bank_name} — {acc.account_number}</span>
+                      {posSelectedBankAccountId === acc.id && (
+                        <span className="ml-auto text-[#e0a84a] text-[10px] font-semibold">✓</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {posError && (
+              <div className="mt-3 rounded-xl bg-rose-500/10 border border-rose-500/20 p-3 text-sm text-rose-400">{posError}</div>
+            )}
+
+            <button
+              onClick={handlePosDeclare}
+              disabled={posDeclaring}
+              className="mt-4 w-full h-11 bg-gradient-to-r from-[#e0a84a] to-amber-500 text-[#0a0f1a] text-sm font-semibold rounded-xl shadow-lg shadow-[#e0a84a]/20 disabled:opacity-50 inline-flex items-center justify-center gap-2"
+            >
+              {posDeclaring ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+              {posDeclaring ? "Declaring..." : "I've paid with POS"}
+            </button>
+
+            <button
+              onClick={() => { setShowPos(false); router.push("/patient/payments"); }}
+              className="mt-2 w-full h-10 rounded-xl border border-border text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Not yet — back to invoices
+            </button>
+          </>
+        )}
+      </Modal>
+
+      {/* ── Paystack notice ── */}
+      {paystackNotice && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 pb-20">
+          <div className="w-full max-w-sm bg-card border border-border rounded-3xl shadow-2xl p-5 text-center">
+            <div className="w-12 h-12 rounded-2xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-center mx-auto mb-3">
+              <CreditCard className="w-6 h-6 text-sky-400" />
+            </div>
+            <h3 className="text-base font-bold text-foreground">Paystack</h3>
+            <p className="text-xs text-muted-foreground mt-1.5">{paystackNotice}</p>
+            {paystackBusy && <Loader2 className="w-5 h-5 animate-spin text-[#e0a84a] mx-auto mt-3" />}
+            <button
+              onClick={() => setPaystackNotice("")}
+              className="mt-4 w-full h-11 bg-gradient-to-r from-[#e0a84a] to-amber-500 text-[#0a0f1a] text-sm font-semibold rounded-xl"
+            >
+              OK
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
