@@ -31,7 +31,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
       {/* Content */}
       <div className="relative z-10 flex min-h-screen flex-col items-center justify-center px-4 py-12">
         {/* Theme toggle — top right, always visible */}
-        <div className="fixed top-4 right-4 z-50">
+        <div className="fixed right-4 z-50" style={{ top: "calc(1rem + env(safe-area-inset-top, 0px))" }}>
           <ThemeToggle />
         </div>
         {children}

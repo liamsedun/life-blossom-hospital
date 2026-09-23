@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import Image from "next/image";
 
 const slides = [
@@ -135,6 +136,24 @@ export default function Hero() {
             </svg>
             Book Appointment
           </a>
+          <Link
+            href="/login"
+            className="electric-ring inline-flex h-13 items-center justify-center gap-2.5 rounded-full bg-white/15 px-8 text-base font-semibold text-white shadow-xl shadow-blue-950/30 backdrop-blur transition hover:-translate-y-0.5 hover:bg-white/25 hover:shadow-2xl active:scale-95 sm:h-14"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="h-5 w-5"
+            >
+              <circle cx="12" cy="8" r="4" />
+              <path d="M4 21c0-4 3.6-6 8-6s8 2 8 6" />
+            </svg>
+            Patient Login
+          </Link>
           <a
             href="https://wa.me/2348157377000"
             target="_blank"

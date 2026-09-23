@@ -60,6 +60,7 @@ export default function Navbar() {
   return (
     <header
       data-over-hero={overHero ? "true" : undefined}
+      style={{ paddingTop: "env(safe-area-inset-top)" }}
       className={`sticky top-0 z-50 border-b transition-colors duration-300 ${
         overHero
           ? "border-transparent bg-transparent"
@@ -187,7 +188,11 @@ export default function Navbar() {
 
       {/* Mobile dropdown menu */}
       <div
-        className={`grid overflow-hidden border-t border-slate-200 bg-white px-4 transition-all duration-300 ease-out dark:border-slate-800 dark:bg-slate-950 md:hidden ${
+        className={`grid overflow-hidden border-t bg-white px-4 transition-all duration-300 ease-out dark:bg-slate-950 md:hidden ${
+          overHero
+            ? "border-white/20"
+            : "border-slate-200 dark:border-slate-800"
+        } ${
           menuOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
         }`}
       >
@@ -199,8 +204,8 @@ export default function Navbar() {
                   href={link.href}
                   onClick={() => setMenuOpen(false)}
                   className={`electric-nav-item block text-base font-medium ${
-                    isActive(link.href) ? "active" : ""
-                  }`}
+                    overHero ? "!text-slate-900 dark:!text-slate-100" : ""
+                  } ${isActive(link.href) ? "active" : ""}`}
                 >
                   <span className="relative z-10">{link.label}</span>
                 </Link>
