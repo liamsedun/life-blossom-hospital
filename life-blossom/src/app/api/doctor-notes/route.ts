@@ -14,11 +14,12 @@ async function callerRole(supabase: any, authUserId: string): Promise<string | n
 }
 
 /** Does this patient record belong to the caller (their own or a dependant)? */
-async function ownsPatient(supabase: any, authUserId: string, patientId: string): Promise<boolean> {
-  const { data: me } = await supabase.from("patients").select("id").eq("user_id", authUserId).maybeSingle();
+async function ownsPatient(_supabase: any, authUserId: string, patientId: string): Promise<boolean> {
+  const svc = createServiceClient();
+  const { data: me } = await svc.from("patients").select("id").eq("user_id", authUserId).maybeSingle();
   if (!me) return false;
   if (me.id === patientId) return true;
-  const { data: dep } = await supabase
+  const { data: dep } = await svc
     .from("patients")
     .select("id")
     .eq("id", patientId)

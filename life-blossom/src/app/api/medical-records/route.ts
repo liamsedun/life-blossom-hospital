@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { withAuth, ok, paginated, err, parseBody, getPagination, ValidationError, resolvePatientId } from "@/lib/api-utils";
+import { createServiceClient } from "@/lib/supabase/server";
 import { logView } from "@/lib/audit";
 
 export const GET = withAuth(async (req, supabase, authUserId) => {
@@ -8,7 +9,8 @@ export const GET = withAuth(async (req, supabase, authUserId) => {
   const recordType = sp.get("record_type");
   const { page, pageSize, from, to } = getPagination(sp);
 
-  let query = supabase
+  const svc = createServiceClient();
+  let query = svc
     .from("medical_records")
     .select("*, patient:patients(*, user:users(id, first_name, last_name)), doctor:staff!doctor_id(*, user:users(id, first_name, last_name))",
       { count: "exact" });

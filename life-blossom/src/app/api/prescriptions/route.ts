@@ -36,8 +36,8 @@ export const GET = withAuth(async (req, supabase, authUserId) => {
     return paginated(data, count || 0, page, pageSize);
   }
 
-  // Staff/admin or patient with specific ID
-  let query = supabase
+  // Staff/admin or patient with specific ID — use service client to bypass RLS
+  let query = svc
     .from("prescriptions")
     .select("*, patient:patients(*, user:users(id, first_name, last_name)), doctor:staff!doctor_id(*, user:users(id, first_name, last_name)), items:prescription_items(*)",
       { count: "exact" })
